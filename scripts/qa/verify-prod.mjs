@@ -179,6 +179,33 @@ if (!cookieA || !cookieB) {
 
 const session = await http("GET /api/auth/session", "/api/auth/session", { cookie: cookieA });
 check("session resolves org + role", session.body.organization?.slug === "mother-ai-qa" && session.body.role === "owner");
+const sessionAgain = await http("GET /api/auth/session (persisted)", "/api/auth/session", { cookie: cookieA });
+check("session persists across requests", sessionAgain.res.status === 200 && sessionAgain.body.user?.id === session.body.user?.id);
+
+// Auth responses expose no secret material; the session cookie is host-only and locked down.
+{
+  const probe = await SoftwareAuthenticator.import(hostCredentials(secrets.orgs["mother-ai-qa-tenant-b"]));
+  const opt = await http("auth probe: login options", "/api/auth/login/options", { json: {} });
+  const assertion = await probe.authenticate(opt.body, ORIGIN);
+  const verify = await http("auth probe: login verify", "/api/auth/login/verify", { json: { response: assertion }, cookie: challengeCookie(opt.setCookies) });
+  secrets.orgs["mother-ai-qa-tenant-b"].credentials = [...secrets.orgs["mother-ai-qa-tenant-b"].credentials.filter((c) => c.rpId !== RP_ID), ...(await probe.export())];
+  saveSecrets(secrets);
+  const sessionSetCookie = verify.setCookies.find((c) => c.startsWith("__Host-mai_session=")) ?? "";
+  const optKeys = Object.keys(opt.body).sort().join(",");
+  check(
+    "auth responses expose no secret material",
+    optKeys === "challenge,rpId,timeout,userVerification" &&
+      opt.body.rpId === RP_ID &&
+      JSON.stringify(verify.body) === '{"ok":true}' &&
+      /HttpOnly/.test(sessionSetCookie) && /Secure/.test(sessionSetCookie) && /SameSite=Strict/.test(sessionSetCookie) && !/Domain=/i.test(sessionSetCookie) &&
+      !JSON.stringify(sessionAgain.body).match(/token|hash|public_key|challenge/i),
+    `options keys ${optKeys}`,
+  );
+  const probeCookie = sessionCookie(verify.setCookies);
+  const logout = await http("auth probe: logout", "/api/auth/logout", { json: {}, cookie: probeCookie });
+  const afterLogout = await http("auth probe: session after logout", "/api/auth/session", { cookie: probeCookie });
+  check("sign-out revokes the session", logout.res.status === 200 && logout.setCookies.some((c) => /__Host-mai_session=;.*Max-Age=0/.test(c)) && afterLogout.res.status === 401);
+}
 
 // Agents and policies (org A)
 const billing = await ensureAgent(cookieA, { agent_id: "billing-agent-prod", display_name: "Billing agent", description: "Issues refunds and credits.", environment: "production" });
