@@ -78,21 +78,24 @@ const version = /Current Version ID:\s*([0-9a-f-]+)/i.exec(out)?.[1] ?? "unknown
 
 // 6. Verify the live Worker serves this commit
 const site = JSON.parse(readFileSync(join(exportDir, "config", "site.json"), "utf8"));
-let verified = false;
-// New versions can take tens of seconds to reach every edge location; allow up to ~90 s.
-for (let attempt = 0; attempt < 45 && !verified; attempt++) {
-  try {
-    const res = await fetch(`${site.origin}/health`, { headers: { "Cache-Control": "no-cache" } });
-    const body = await res.json();
-    if (body.commit === sha && body.status === "ok") verified = true;
-    else await new Promise((r) => setTimeout(r, 2000));
-  } catch {
-    await new Promise((r) => setTimeout(r, 2000));
+// New versions can take tens of seconds to reach every edge location; allow up to ~90 s per host.
+for (const origin of [site.origin, ...(site.fallbackOrigins ?? [])]) {
+  let verified = false;
+  for (let attempt = 0; attempt < 45 && !verified; attempt++) {
+    try {
+      const res = await fetch(`${origin}/health`, { headers: { "Cache-Control": "no-cache" } });
+      const body = await res.json();
+      if (body.commit === sha && body.status === "ok") verified = true;
+      else await new Promise((r) => setTimeout(r, 2000));
+    } catch {
+      await new Promise((r) => setTimeout(r, 2000));
+    }
   }
-}
-if (!verified) {
-  console.error(`✗ ${site.origin}/health does not report commit ${sha}.`);
-  process.exit(1);
+  if (!verified) {
+    console.error(`✗ ${origin}/health does not report commit ${sha}.`);
+    process.exit(1);
+  }
+  console.log(`✓ ${origin}/health reports ${sha}`);
 }
 rmSync(exportDir, { recursive: true, force: true });
 console.log(`\n✓ mother-ai deployed\n  commit:  ${sha}\n  version: ${version}\n  url:     ${site.origin}`);

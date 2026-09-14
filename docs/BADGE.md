@@ -53,7 +53,7 @@ Evaluation order: revoked → suspended → active → (suspended if previously 
 |---|---|
 | `GET /badge/{token}.svg` | Dark badge (default). Public, embeddable (`Cross-Origin-Resource-Policy: cross-origin`). |
 | `GET /badge/{token}.svg?theme=light` | Light badge. |
-| `GET /verify/{token}` | Public verification page: organization display name, status, controls, last verified time, last gateway activity (date), first activation date, engine version, disclaimer. `noindex`. |
+| `GET /verify/{token}` | Public verification page (on the fallback host this redirects to the canonical host): organization display name, status, controls, last verified time, last gateway activity (date), first activation date, engine version, disclaimer. `noindex`. |
 
 Rate limit: 300 requests/minute per IP across badge and verification endpoints.
 
@@ -62,14 +62,14 @@ Rate limit: 300 requests/minute per IP across badge and verification endpoints.
 Markdown:
 
 ```markdown
-[![Mother AI Protected — AI Controls Active](https://mother-ai.sales-fd3.workers.dev/badge/TOKEN.svg)](https://mother-ai.sales-fd3.workers.dev/verify/TOKEN)
+[![Mother AI Protected — AI Controls Active](https://mother.proptechusa.ai/badge/TOKEN.svg)](https://mother.proptechusa.ai/verify/TOKEN)
 ```
 
 HTML:
 
 ```html
-<a href="https://mother-ai.sales-fd3.workers.dev/verify/TOKEN">
-  <img src="https://mother-ai.sales-fd3.workers.dev/badge/TOKEN.svg" alt="Mother AI Protected — AI Controls Active" width="236" height="48">
+<a href="https://mother.proptechusa.ai/verify/TOKEN">
+  <img src="https://mother.proptechusa.ai/badge/TOKEN.svg" alt="Mother AI Protected — AI Controls Active" width="236" height="48">
 </a>
 ```
 

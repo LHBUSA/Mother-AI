@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { call, createEnv } from "../helpers/env";
+import { call, createEnv, FALLBACK_ORIGIN, ORIGIN, seedAgent, seedKey, seedOrg } from "../helpers/env";
 import { DEMO_SCENARIOS } from "../../src/demo/workspace";
 
 describe("demo workspace", () => {
@@ -138,5 +138,141 @@ describe("health, headers and routing", () => {
     const text = await gw.text();
     expect(text).not.toContain("secret internal detail");
     expect(JSON.parse(text)).toMatchObject({ decision: "block" });
+  });
+});
+
+describe("canonical host and workers.dev fallback", () => {
+  it("uses mother.proptechusa.ai as the canonical origin", () => {
+    expect(ORIGIN).toBe("https://mother.proptechusa.ai");
+    expect(FALLBACK_ORIGIN).toBe("https://mother-ai.sales-fd3.workers.dev");
+  });
+
+  it("redirects human-facing pages on the fallback host, preserving path and query", async () => {
+    const env = createEnv();
+    for (const path of ["/", "/app/", "/app/policies/pol_x?tab=1", "/app/accept-invite", `/verify/${"A".repeat(32)}`]) {
+      const res = await call(env, path, { host: FALLBACK_ORIGIN });
+      expect(res.status).toBe(308);
+      expect(res.headers.get("Location")).toBe(`${ORIGIN}${path}`);
+    }
+    expect((await call(env, "/", {})).status).toBe(200);
+    expect(await (await call(env, "/robots.txt", { host: FALLBACK_ORIGIN })).text()).toBe("User-agent: *\nDisallow: /\n");
+    expect(await (await call(env, "/robots.txt")).text()).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+  });
+
+  it("keeps gateway, badge and health working on the fallback host", async () => {
+    const env = createEnv();
+    const orgId = await seedOrg(env);
+    const key = await seedKey(env, orgId);
+    await seedAgent(env, orgId, "billing-agent-prod");
+    const gw = await call(env, "/v1/evaluate", { host: FALLBACK_ORIGIN, key: key.raw, json: { agent_id: "billing-agent-prod", capability: "payments", operation: "refund" } });
+    expect(gw.status).toBe(200);
+    expect(await gw.json()).toMatchObject({ decision: "block", reason_code: "DEFAULT_DENY" });
+    expect((await call(env, "/health", { host: FALLBACK_ORIGIN })).status).toBe(200);
+    const svg = await call(env, `/badge/${"A".repeat(32)}.svg`, { host: FALLBACK_ORIGIN });
+    expect(svg.status).toBe(404);
+    expect(svg.headers.get("Content-Type")).toContain("image/svg+xml");
+  });
+
+  it("refuses passkey ceremonies anywhere but the canonical host", async () => {
+    const env = createEnv();
+    const res = await call(env, "/api/auth/login/options", { host: FALLBACK_ORIGIN, json: {}, origin: FALLBACK_ORIGIN });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: { code: "ORIGIN_NOT_ALLOWED" } });
+    const ok = await call(env, "/api/auth/login/options", { json: {} });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { rpId: string }).rpId).toBe("mother.proptechusa.ai");
+  });
+});
+
+describe("founding access with Turnstile enforced", () => {
+  const valid = { name: "Jane Doe", company: "Acme, Inc.", work_email: "jane@acme.com", use_case: "Govern refunds issued by our support agents.", agent_count: "6-25", uses_mcp: "yes", website: "" };
+  const keys = { TURNSTILE_SITE_KEY: "0x4AAAAAAA-test-site-key", TURNSTILE_SECRET_KEY: "0x4AAAAAAA-test-secret" };
+  const realFetch = globalThis.fetch;
+  const redeemed = new Set<string>();
+  const calls: Array<Record<string, string>> = [];
+
+  function mockSiteverify() {
+    redeemed.clear();
+    calls.length = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
+      const form = init!.body as FormData;
+      const token = String(form.get("response"));
+      calls.push({ secret: String(form.get("secret")), response: token, remoteip: String(form.get("remoteip")) });
+      if (token === "good" || token === "good-2") {
+        if (redeemed.has(token)) return Response.json({ success: false, "error-codes": ["timeout-or-duplicate"] });
+        redeemed.add(token);
+        return Response.json({ success: true, hostname: "mother.proptechusa.ai" });
+      }
+      if (token === "other-host") return Response.json({ success: true, hostname: "evil.example" });
+      return Response.json({ success: false, "error-codes": ["invalid-input-response"] });
+    }) as typeof fetch;
+  }
+
+  async function submit(env: ReturnType<typeof createEnv>, extra: Record<string, unknown>) {
+    const t = (await (await call(env, "/api/founding-access/token")).json()) as { form_token: string; turnstile_site_key: string | null };
+    expect(t.turnstile_site_key).toBe(keys.TURNSTILE_SITE_KEY);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 10_000);
+    try {
+      return await call(env, "/api/founding-access", { json: { ...valid, form_token: t.form_token, ...extra } });
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
+  it("accepts a valid token once, and rejects invalid, missing, replayed and wrong-host tokens", async () => {
+    mockSiteverify();
+    try {
+      const env = createEnv(keys);
+      expect(((await (await call(env, "/ready")).json()) as { checks: { turnstile: string } }).checks.turnstile).toBe("enforced");
+
+      const missing = await submit(env, {});
+      expect(missing.status).toBe(403);
+      expect(await missing.json()).toMatchObject({ error: { code: "VERIFICATION_FAILED" } });
+
+      const invalid = await submit(env, { turnstile_token: "forged" });
+      expect(invalid.status).toBe(403);
+
+      const wrongHost = await submit(env, { turnstile_token: "other-host" });
+      expect(wrongHost.status).toBe(403);
+
+      const ok = await submit(env, { turnstile_token: "good" });
+      expect(ok.status).toBe(201);
+      expect(calls.at(-1)).toEqual({ secret: keys.TURNSTILE_SECRET_KEY, response: "good", remoteip: "203.0.113.7" });
+
+      const replay = await submit(env, { turnstile_token: "good", work_email: "second@acme.com" });
+      expect(replay.status).toBe(403);
+
+      // Honeypot short-circuits before verification and stores nothing.
+      const bot = await submit(env, { website: "http://spam", turnstile_token: "forged", work_email: "bot@spam.example" });
+      expect(bot.status).toBe(201);
+
+      const rows = await env.DB.prepare(`SELECT work_email, turnstile, ip_hash FROM founding_access_requests`).all<Record<string, string>>();
+      expect(rows.results).toHaveLength(1);
+      expect(rows.results[0]).toMatchObject({ work_email: "jane@acme.com", turnstile: "verified" });
+      expect(rows.results[0]!.ip_hash).toMatch(/^[0-9a-f]{64}$/);
+      const all = JSON.stringify(await env.DB.prepare(`SELECT * FROM founding_access_requests`).all());
+      expect(all).not.toContain("203.0.113.7");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("fails closed when siteverify is unreachable or only one key is configured", async () => {
+    globalThis.fetch = (async () => {
+      throw new TypeError("network down");
+    }) as typeof fetch;
+    try {
+      const env = createEnv(keys);
+      const res = await submit(env, { turnstile_token: "good-2" });
+      expect(res.status).toBe(503);
+      expect((await env.DB.prepare(`SELECT COUNT(*) AS n FROM founding_access_requests`).first<{ n: number }>())?.n).toBe(0);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const half = createEnv({ TURNSTILE_SECRET_KEY: "only-secret" });
+    expect((await call(half, "/api/founding-access/token")).status).toBe(503);
+    expect(((await (await call(half, "/ready")).json()) as { checks: { turnstile: string } }).checks.turnstile).toBe("misconfigured");
   });
 });

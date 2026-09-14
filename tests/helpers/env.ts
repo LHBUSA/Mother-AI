@@ -7,6 +7,7 @@ import { SESSION_COOKIE } from "../../src/auth/sessions";
 import type { Role } from "../../src/auth/rbac";
 
 export const ORIGIN = site.origin;
+export const FALLBACK_ORIGIN = site.fallbackOrigins[0]!;
 
 export class ToggleLimiter implements RateLimiter {
   blocked = false;
@@ -48,7 +49,6 @@ export function createEnv(overrides: Partial<Env> = {}): TestEnv {
     ...limiters,
     ENVIRONMENT: "production",
     GIT_SHA: "test",
-    TURNSTILE_SITE_KEY: "",
     FORM_SIGNING_KEY: "test-form-signing-key-0123456789abcdef",
     ...overrides,
     shim,
@@ -66,7 +66,7 @@ export function ctx(): ExecutionContext & { pending: Promise<unknown>[] } {
   } as unknown as ExecutionContext & { pending: Promise<unknown>[] };
 }
 
-export async function call(env: TestEnv, path: string, init: RequestInit & { json?: unknown; key?: string; cookie?: string; origin?: string | null } = {}): Promise<Response> {
+export async function call(env: TestEnv, path: string, init: RequestInit & { json?: unknown; key?: string; cookie?: string; origin?: string | null; host?: string } = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.json !== undefined) {
     headers.set("Content-Type", "application/json");
@@ -76,7 +76,7 @@ export async function call(env: TestEnv, path: string, init: RequestInit & { jso
   const method = init.method ?? (init.json !== undefined ? "POST" : "GET");
   if (method !== "GET" && init.origin !== null) headers.set("Origin", init.origin ?? ORIGIN);
   headers.set("CF-Connecting-IP", "203.0.113.7");
-  const request = new Request(`${ORIGIN}${path}`, {
+  const request = new Request(`${init.host ?? ORIGIN}${path}`, {
     method,
     headers,
     body: init.json !== undefined ? JSON.stringify(init.json) : (init.body ?? null),

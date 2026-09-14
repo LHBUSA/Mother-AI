@@ -1,6 +1,6 @@
 # Mother AI Gateway API
 
-Base URL: `https://mother-ai.sales-fd3.workers.dev` (the canonical origin lives in `config/site.json`).
+Base URL: `https://mother.proptechusa.ai` (the canonical origin lives in `config/site.json`). `https://mother-ai.sales-fd3.workers.dev` remains an operational fallback for `/v1/*`; new integrations should use the canonical host.
 
 The gateway is a **policy decision point**. Your integration calls Mother AI *before* an agent executes a protected action, and executes the action only when Mother returns `allow` (or when a `review` has been approved and consumed).
 
@@ -277,7 +277,7 @@ The response has the same shape as `/v1/evaluate`. Equivalent `/v1/evaluate` bod
 
 ```ts
 async function guardedToolCall(server: string, tool: string, args: Record<string, unknown>, invoke: () => Promise<unknown>) {
-  const res = await fetch("https://mother-ai.sales-fd3.workers.dev/v1/mcp/evaluate", {
+  const res = await fetch("https://mother.proptechusa.ai/v1/mcp/evaluate", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.MOTHER_AI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ request_id: crypto.randomUUID(), agent_id: "sales-agent-prod", server, tool, arguments: args }),

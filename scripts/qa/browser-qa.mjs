@@ -75,7 +75,9 @@ await cdp.send("WebAuthn.enable");
 const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
   options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
 });
-const cred = qa.credentials[0];
+// Passkeys are hostname-bound: use the QA credential registered for this host.
+const cred = qa.credentials.find((c) => c.rpId === new URL(ORIGIN).hostname);
+if (!cred) throw new Error(`No QA passkey for ${new URL(ORIGIN).hostname}; run scripts/qa/verify-prod.mjs first.`);
 const pkcs8 = createPrivateKey({ key: cred.jwk, format: "jwk" }).export({ type: "pkcs8", format: "der" }).toString("base64");
 await cdp.send("WebAuthn.addCredential", {
   authenticatorId,
@@ -250,7 +252,7 @@ check("UI-created key works, then UI revoke blocks it", beforeRevoke.body.decisi
 const { credentials } = await cdp.send("WebAuthn.getCredentials", { authenticatorId });
 const updated = credentials.find((c) => Buffer.from(c.credentialId, "base64").toString("base64url") === cred.id);
 if (updated) {
-  qa.credentials[0].counter = updated.signCount;
+  cred.counter = updated.signCount;
   writeFileSync(SECRETS, JSON.stringify(secrets, null, 2));
 }
 

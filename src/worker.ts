@@ -22,6 +22,7 @@ import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken,
 import { handleBadgeSvg, handleVerifyPage } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
 import { robotsTxt, sitemapXml } from "./lib/seo";
+import { canonicalRedirect } from "./lib/site";
 
 const BADGE_SVG = /^\/badge\/([0-9A-Za-z]{1,64})\.svg$/;
 const VERIFY = /^\/verify\/([0-9A-Za-z]{1,64})\/?$/;
@@ -64,11 +65,14 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   const nowMs = Date.now();
   const deps = { now: () => Date.now(), waitUntil: (p: Promise<unknown>) => ctx.waitUntil(p) };
 
+  const redirect = canonicalRedirect(request);
+  if (redirect) return redirect;
+
   if (pathname.startsWith("/v1/")) return routeV1(request, env, deps);
   if (pathname.startsWith("/api/")) return handleApi(request, env, nowMs, ctx);
   if (pathname === "/health") return health(env, nowMs);
   if (pathname === "/ready") return ready(env);
-  if (pathname === "/robots.txt") return robotsTxt();
+  if (pathname === "/robots.txt") return robotsTxt(url);
   if (pathname === "/sitemap.xml") return sitemapXml();
 
   const badge = BADGE_SVG.exec(pathname);

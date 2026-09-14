@@ -9,6 +9,10 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 preview_urls = false
 
+# Canonical public host (config/site.json "origin"). workers.dev stays enabled as the
+# operational fallback for gateway/API/badge traffic; human-facing pages redirect.
+routes = [{ pattern = "mother.proptechusa.ai", custom_domain = true }]
+
 [assets]
 directory = "./dist/web"
 binding = "ASSETS"
@@ -67,9 +71,9 @@ crons = ["*/10 * * * *"]
 
 [vars]
 ENVIRONMENT = "production"
-# Public Turnstile site key. Empty = Turnstile not configured; forms fall back
-# to rate limiting + honeypot + signed form timing. Secret: TURNSTILE_SECRET_KEY.
-TURNSTILE_SITE_KEY = ""
+# Turnstile keys are Worker secrets (TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY), not vars,
+# so a deploy can never overwrite them. With neither set, Founding Access relies on rate
+# limiting + honeypot + signed form timing; with both set, Turnstile is enforced.
 # Set at deploy time by scripts/deploy.mjs (--var GIT_SHA:<sha>).
 GIT_SHA = "dev"
 

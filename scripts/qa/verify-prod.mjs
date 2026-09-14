@@ -93,10 +93,19 @@ function saveSecrets(s) {
   writeFileSync(SECRETS, JSON.stringify(s, null, 2));
 }
 
+// Passkeys are bound to a hostname (WebAuthn RP ID), so QA identities are kept per host.
+const RP_ID = new URL(ORIGIN).hostname;
+const hostCredentials = (entry) => (entry?.credentials ?? []).filter((c) => c.rpId === RP_ID);
+
 async function bootstrapOrg(secrets, slug, name) {
-  if (secrets.orgs[slug]?.credentials) return;
-  console.log(`… bootstrapping internal QA org ${slug}`);
-  const out = execFileSync(process.execPath, [join(ROOT, "scripts", "ops", "create-org.mjs"), "--slug", slug, "--name", name, "--owner", "Mother AI QA", "--kind", "internal", "--remote"], { cwd: ROOT, encoding: "utf8" });
+  if (hostCredentials(secrets.orgs[slug]).length) return;
+  const exists = !!secrets.orgs[slug];
+  console.log(`… ${exists ? "issuing a new QA owner invite for" : "bootstrapping internal QA org"} ${slug} on ${RP_ID}`);
+  const script = exists ? "invite.mjs" : "create-org.mjs";
+  const scriptArgs = exists
+    ? ["--slug", slug, "--name", "Mother AI QA", "--role", "owner", "--remote"]
+    : ["--slug", slug, "--name", name, "--owner", "Mother AI QA", "--kind", "internal", "--remote"];
+  const out = execFileSync(process.execPath, [join(ROOT, "scripts", "ops", script), ...scriptArgs], { cwd: ROOT, encoding: "utf8" });
   const { invite_url } = JSON.parse(out.slice(out.indexOf("{")));
   const token = new URL(invite_url).hash.replace("#token=", "");
   const auth = new SoftwareAuthenticator();
@@ -104,16 +113,20 @@ async function bootstrapOrg(secrets, slug, name) {
   const credential = await auth.register(opt.body, ORIGIN);
   const verify = await http(`bootstrap ${slug}: register verify`, "/api/auth/register/verify", { json: { token, response: credential, device_name: "QA software authenticator" }, cookie: challengeCookie(opt.setCookies) });
   if (verify.res.status !== 200) throw new Error(`bootstrap failed for ${slug}: ${JSON.stringify(verify.body)}`);
-  secrets.orgs[slug] = { credentials: await auth.export() };
+  secrets.orgs[slug] = { ...(secrets.orgs[slug] ?? {}), credentials: [...(secrets.orgs[slug]?.credentials ?? []), ...(await auth.export())] };
+  delete secrets.orgs[slug].live_key;
+  delete secrets.orgs[slug].live_key_id;
   saveSecrets(secrets);
 }
 
 async function signIn(secrets, slug) {
-  const auth = await SoftwareAuthenticator.import(secrets.orgs[slug].credentials);
+  const mine = hostCredentials(secrets.orgs[slug]);
+  const auth = await SoftwareAuthenticator.import(mine);
   const opt = await http(`${slug}: login options`, "/api/auth/login/options", { json: {} });
   const assertion = await auth.authenticate(opt.body, ORIGIN);
   const verify = await http(`${slug}: login verify (passkey)`, "/api/auth/login/verify", { json: { response: assertion }, cookie: challengeCookie(opt.setCookies) });
-  secrets.orgs[slug].credentials = await auth.export(); // persist signature counter
+  const refreshed = await auth.export(); // persist signature counter
+  secrets.orgs[slug].credentials = [...secrets.orgs[slug].credentials.filter((c) => c.rpId !== RP_ID), ...refreshed];
   saveSecrets(secrets);
   const cookie = sessionCookie(verify.setCookies);
   check(`${slug}: passkey sign-in`, verify.res.status === 200 && cookie, `HTTP ${verify.res.status}`);

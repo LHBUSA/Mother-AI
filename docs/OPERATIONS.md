@@ -16,7 +16,9 @@ git checkout main && git pull --ff-only && git status
 | Rate limiting | `RL_*` (namespaces 4101–4107) | Abuse controls |
 | Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup |
 | Secret | `FORM_SIGNING_KEY` | Founding Access form tokens |
-| Secret (optional) | `TURNSTILE_SECRET_KEY` + var `TURNSTILE_SITE_KEY` | Turnstile on Founding Access |
+| Secrets (optional) | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Turnstile on Founding Access (enforced only when both are set) |
+| Custom domain | `mother.proptechusa.ai` (zone `proptechusa.ai`) | Canonical public host |
+| Fallback host | `mother-ai.sales-fd3.workers.dev` | Gateway/API/badge traffic; human pages 308 to canonical |
 
 ## Onboard an organization
 
@@ -56,19 +58,29 @@ The change and reason are appended to the organization's control events. Revocat
 
 ## Turnstile
 
-The current Wrangler OAuth token lacks the Turnstile scope, so no widget exists yet. To enable:
+The Wrangler OAuth token has no Turnstile (challenge widgets) permission, so the widget is created in the dashboard:
 
-1. Cloudflare dashboard → Turnstile → add a widget for the production hostname (managed mode).
-2. Put the site key in `wrangler.toml` `[vars] TURNSTILE_SITE_KEY`, commit, push.
-3. `npx wrangler secret put TURNSTILE_SECRET_KEY`
-4. `npm run deploy`. The form loads the widget automatically and the server enforces it; `/ready` reports `turnstile: true`.
+1. Cloudflare dashboard → account `Sales@localhomebuyersusa.com's Account` → **Turnstile** → **Add widget**.
+2. Widget name `Mother AI Founding Access`; **Hostname management** → add `mother.proptechusa.ai`; **Widget mode** → **Managed**; pre-clearance **No**. Create.
+3. Store both values as Worker secrets (you will be prompted; nothing touches Git):
 
-## Custom domain cutover
+   ```bash
+   npx wrangler secret put TURNSTILE_SITE_KEY
+   npx wrangler secret put TURNSTILE_SECRET_KEY
+   ```
 
-1. Attach the domain to the `mother-ai` Worker (Custom Domains) in Cloudflare.
-2. Change `origin` in `config/site.json` (canonical, OG, sitemap, robots, badge/verify URLs and the WebAuthn relying-party origin all derive from it). Commit, push, `npm run deploy`.
-3. Passkeys are bound to a hostname. Existing users must register a new passkey on the new domain: issue invites with `scripts/ops/invite.mjs`.
-4. Customers' badge embeds contain the old origin. Keep the workers.dev hostname serving (it does by default) or ask customers to update snippets.
+4. `curl https://mother.proptechusa.ai/ready` reports `"turnstile":"enforced"`. With only one key set it reports `misconfigured` and Founding Access fails closed.
+
+Server-side verification rejects missing, invalid, expired and already-redeemed tokens, and tokens whose `hostname` is not the canonical host. If siteverify is unreachable the submission fails closed (503).
+
+## Custom domain
+
+`mother.proptechusa.ai` is a Workers Custom Domain on the `mother-ai` Worker, declared in `wrangler.toml` (`routes`, `custom_domain = true`); `wrangler deploy` manages its DNS record and certificate.
+
+- `config/site.json` `origin` is the single source for canonical/OG URLs, sitemap/robots, badge and verify URLs, invite URLs and the WebAuthn relying party.
+- `fallbackOrigins` (workers.dev) keeps serving `/v1/*`, `/api/*`, `/badge/*.svg`, `/health`; `/`, `/app/*` and `/verify/*` redirect (308) to the canonical host; robots.txt disallows everything there.
+- Passkeys are hostname-bound: sign-in works only on the canonical host. Moving hosts again requires new passkeys (issue invites with `scripts/ops/invite.mjs`).
+- Deploys verify `/health` on the canonical host and every fallback host.
 
 ## Rollback
 

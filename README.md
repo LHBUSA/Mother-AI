@@ -8,7 +8,7 @@ AI agents now hold real credentials to CRMs, databases, payment systems, interna
 
 Zero-trust access control and observability for autonomous agents. No "rogue AI detection", no LLM deciding what production operations are permitted.
 
-Production: **https://mother-ai.sales-fd3.workers.dev**
+Production: **https://mother.proptechusa.ai** (operational fallback for API/badge traffic: `https://mother-ai.sales-fd3.workers.dev`)
 
 ---
 
@@ -134,8 +134,8 @@ Production must always correspond to committed, pushed `main`.
 ## Production verification
 
 ```bash
-curl -s https://mother-ai.sales-fd3.workers.dev/health   # status, version, commit, policy_engine, d1
-curl -s https://mother-ai.sales-fd3.workers.dev/ready    # d1, schema, form_signing, turnstile
+curl -s https://mother.proptechusa.ai/health   # status, version, commit, policy_engine, d1
+curl -s https://mother.proptechusa.ai/ready    # d1, schema, form_signing, turnstile
 node scripts/qa/verify-prod.mjs                           # gateway/console/badge proof against production
 ```
 
