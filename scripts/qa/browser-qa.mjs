@@ -308,7 +308,9 @@ check("UI-created key works, then UI revoke blocks it", beforeRevoke.body.decisi
 // submitted from the real browser directly to the API host.
 for (const width of [1440, 390]) {
   await page.setViewport({ width, height: width === 390 ? 844 : 900 });
-  await page.goto(`${ORIGIN}/#founding-access`, { waitUntil: "networkidle0" });
+  // A hash-only navigation would keep the previous success state; force a fresh document.
+  await page.goto("about:blank");
+  await page.goto(`${ORIGIN}/?fa=${width}#founding-access`, { waitUntil: "networkidle0" });
   await settle();
   await page.evaluate(() => document.querySelector("#founding-access")?.scrollIntoView());
   const before = await page.evaluate(() => ({
@@ -321,11 +323,12 @@ for (const width of [1440, 390]) {
   await shot("founding-access-form", width);
   check(`Founding Access form unchanged before submit, with booking link @${width}`, before.fields && before.formVisible && before.doneHidden && before.talkHref === SITE.bookingUrl && before.talkTarget === "_blank", JSON.stringify(before));
 
-  const email = `qa+founding-ui-${width}-${run}@localhomebuyersusa.com`;
-  await page.type('[data-fa-form] [name="name"]', "Mother AI QA");
+  // One real QA lead per run: 1440 creates it (one Slack notification); 390 reuses the email, so it is a duplicate and must not notify.
+  const email = `qa+founding-ui-${run}@localhomebuyersusa.com`;
+  await page.type('[data-fa-form] [name="name"]', "QA TEST - Mother AI internal (ignore)");
   await page.type('[data-fa-form] [name="company"]', "Mother AI QA (internal)");
   await page.type('[data-fa-form] [name="work_email"]', email);
-  await page.type('[data-fa-form] [name="use_case"]', `Internal browser QA of Founding Access + Slack lead routing (${width}px). Not a customer request.`);
+  await page.type('[data-fa-form] [name="use_case"]', `QA TEST - automated production check of Founding Access, Calendly CTA and Slack lead routing. Not a customer request; please ignore. Run ${run}.`);
   await page.select('[data-fa-form] [name="agent_count"]', "1-5");
   await page.select('[data-fa-form] [name="uses_mcp"]', "evaluating");
   await new Promise((r) => setTimeout(r, 4000)); // minimum submit time is enforced server-side
