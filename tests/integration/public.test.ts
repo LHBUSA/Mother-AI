@@ -119,6 +119,10 @@ describe("health, headers and routing", () => {
       expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=");
       expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
     }
+    // HTML must be no-transform so zone edge features never inject scripts into Mother AI pages.
+    for (const path of ["/", "/app/policies/pol_x", "/nope", `/verify/${"A".repeat(32)}`]) {
+      expect((await call(env, path)).headers.get("Cache-Control")).toMatch(/no-transform/);
+    }
     const deep = await call(env, "/app/policies/pol_x");
     expect(deep.status).toBe(200);
     expect(await deep.text()).toContain("asset /app/");
