@@ -64,6 +64,18 @@ The change and reason are appended to the organization's control events. Revocat
 - The zone `proptechusa.ai` has wildcard Worker routes for other products (`*proptechusa.ai/sitemap.xml`, `/site-map`, `/news/*`). Mother hosts served by the Worker are pinned with host routes in `wrangler.toml`. The Vercel UI record must be **DNS-only** so zone routes and Web Analytics injection never apply to it.
 - No Turnstile or other CAPTCHA is used.
 
+## UI cutover to Vercel (one-time)
+
+Pre-conditions: Vercel project `mother` has `mother.proptechusa.ai` attached (`verified: true`); `api.mother.proptechusa.ai` is live on the Worker; browser + API QA pass with the Worker still serving the UI.
+
+1. `node scripts/ops/ui-cutover.mjs status` (read-only).
+2. `node scripts/ops/ui-cutover.mjs release` — deletes the Worker Custom Domain and host routes for `mother.proptechusa.ai`. Cloudflare removes the Worker-managed DNS record; the UI is offline until step 3.
+3. Cloudflare DNS (zone `proptechusa.ai`): `CNAME mother → 78326c855bbef250.vercel-dns-016.com`, **Proxy status: DNS only**, TTL Auto.
+4. Remove the `mother.proptechusa.ai` routes from `wrangler.toml`, commit, push, `npm run deploy` (so a later deploy never re-attaches the UI host to the Worker).
+5. Production QA on `https://mother.proptechusa.ai` (served by Vercel: `x-vercel-id` header).
+
+Rollback: delete the `mother` CNAME, then `node scripts/ops/ui-cutover.mjs rollback` (re-attaches the Custom Domain and host routes; the Worker still contains the UI build until it is made API-only). Vercel keeps the domain attached harmlessly.
+
 ## Rollback
 
 ```bash
