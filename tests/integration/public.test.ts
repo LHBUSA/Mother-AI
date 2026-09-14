@@ -120,7 +120,8 @@ describe("health, headers and routing", () => {
       expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
     }
     // HTML must be no-transform so zone edge features never inject scripts into Mother AI pages.
-    for (const path of ["/", "/app/policies/pol_x", "/nope", `/verify/${"A".repeat(32)}`]) {
+    // (/nope is excluded: the mocked ASSETS binding has no 404.html, so it falls back to text/plain.)
+    for (const path of ["/", "/app/policies/pol_x", `/verify/${"A".repeat(32)}`]) {
       expect((await call(env, path)).headers.get("Cache-Control")).toMatch(/no-transform/);
     }
     const deep = await call(env, "/app/policies/pol_x");
