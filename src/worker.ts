@@ -7,10 +7,9 @@
 //   /api/founding-access public early-access capture
 //   /api/public/badges/{t} public verification data (for the UI /verify page)
 //   /badge/{token}.svg   live badge
-//   /verify/{token}      public verification page (UI shell; data from /api/public/badges)
 //   /health, /ready      service health
-//   /app/*               control-plane SPA (static assets)
-//   everything else      marketing site (static assets)
+//   /, /app/*, /verify/* 308 to the UI (https://mother.proptechusa.ai, served by Vercel)
+//   everything else      404 JSON — this Worker serves no UI
 
 import type { Env } from "./env";
 import { ApiError, errorResponse, json, methodNotAllowed } from "./lib/http";
@@ -22,12 +21,11 @@ import { routeConsole } from "./api/console/index";
 import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken, health, ready } from "./api/public";
 import { handleBadgeSvg, handlePublicBadge } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
-import { robotsTxt, sitemapXml } from "./lib/seo";
+import { robotsTxt } from "./lib/seo";
 import { canonicalRedirect } from "./lib/site";
 import { applyCors, preflight } from "./lib/cors";
 
 const BADGE_SVG = /^\/badge\/([0-9A-Za-z]{1,64})\.svg$/;
-const VERIFY = /^\/verify\/([0-9A-Za-z]{1,64})\/?$/;
 const PUBLIC_BADGE = /^\/api\/public\/badges\/([0-9A-Za-z]{1,64})$/;
 
 async function handleApi(request: Request, env: Env, nowMs: number, ctx: ExecutionContext): Promise<Response> {
@@ -49,24 +47,8 @@ async function handleApi(request: Request, env: Env, nowMs: number, ctx: Executi
   }
 }
 
-async function serveUiShell(request: Request, env: Env, shell: "/app/" | "/verify/"): Promise<Response> {
-  const url = new URL(request.url);
-  const res = await env.ASSETS.fetch(new Request(new URL(shell, url.origin), { headers: request.headers }));
-  const out = new Response(res.body, res);
-  out.headers.set("Cache-Control", "no-cache");
-  out.headers.set("X-Robots-Tag", "noindex, nofollow");
-  return out;
-}
-
-async function notFoundPage(request: Request, env: Env): Promise<Response> {
-  const res = await env.ASSETS.fetch(new Request(new URL("/404.html", request.url)));
-  if (res.ok) return new Response(res.body, { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
-  return new Response("Not found", { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-}
-
 async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const url = new URL(request.url);
-  const { pathname } = url;
+  const { pathname } = new URL(request.url);
   const nowMs = Date.now();
   const deps = { now: () => Date.now(), waitUntil: (p: Promise<unknown>) => ctx.waitUntil(p) };
 
@@ -77,31 +59,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (pathname.startsWith("/api/")) return handleApi(request, env, nowMs, ctx);
   if (pathname === "/health") return health(env, nowMs);
   if (pathname === "/ready") return ready(env);
-  if (pathname === "/robots.txt") return robotsTxt(url);
-  if (pathname === "/sitemap.xml") return sitemapXml();
+  if (pathname === "/robots.txt") return robotsTxt();
 
   const badge = BADGE_SVG.exec(pathname);
   if (badge) return request.method === "GET" || request.method === "HEAD" ? handleBadgeSvg(request, env, badge[1]!, nowMs, ctx) : methodNotAllowed(["GET"]);
-  const verify = VERIFY.exec(pathname);
-  // The verification page is part of the UI build; it reads /api/public/badges/{token} from the API.
-  if (verify) return request.method === "GET" || request.method === "HEAD" ? serveUiShell(request, env, "/verify/") : methodNotAllowed(["GET"]);
 
-  if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed(["GET"]);
-
-  if (pathname === "/app") return Response.redirect(new URL("/app/", url.origin).toString(), 308);
-  if (pathname.startsWith("/app/")) {
-    const isAsset = /\.[A-Za-z0-9]{1,8}$/.test(pathname);
-    if (!isAsset) return serveUiShell(request, env, "/app/");
-  }
-
-  const asset = await env.ASSETS.fetch(request);
-  if (asset.status === 404) return notFoundPage(request, env);
-  if (/^\/assets\//.test(pathname) && asset.ok) {
-    const cached = new Response(asset.body, asset);
-    cached.headers.set("Cache-Control", "public, max-age=31536000, immutable");
-    return cached;
-  }
-  return asset;
+  // The public UI (marketing, console, /verify) is served by Vercel; this Worker is API-only.
+  return json({ error: { code: "NOT_FOUND", message: "Not found." } }, 404);
 }
 
 export default {

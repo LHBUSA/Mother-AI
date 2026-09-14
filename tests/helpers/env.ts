@@ -35,18 +35,8 @@ export function createEnv(overrides: Partial<Env> = {}): TestEnv {
     RL_CONSOLE: new ToggleLimiter(),
     RL_PUBLIC_BADGE: new ToggleLimiter(),
   };
-  const assets = {
-    fetch: async (input: Request | string) => {
-      const url = new URL(typeof input === "string" ? input : input.url);
-      if (url.pathname === "/" || url.pathname === "/app/" || url.pathname === "/verify/") {
-        return new Response(`<!doctype html><title>asset ${url.pathname}</title>`, { headers: { "Content-Type": "text/html" } });
-      }
-      return new Response("not found", { status: 404 });
-    },
-  } as unknown as Fetcher;
   return {
     DB: shim.asD1(),
-    ASSETS: assets,
     ...limiters,
     ENVIRONMENT: "production",
     GIT_SHA: "test",
@@ -77,7 +67,8 @@ export async function call(env: TestEnv, path: string, init: RequestInit & { jso
   const method = init.method ?? (init.json !== undefined ? "POST" : "GET");
   if (method !== "GET" && init.origin !== null) headers.set("Origin", init.origin ?? ORIGIN);
   headers.set("CF-Connecting-IP", "203.0.113.7");
-  const request = new Request(`${init.host ?? ORIGIN}${path}`, {
+  // The Worker is API-only: requests default to the API host.
+  const request = new Request(`${init.host ?? API_ORIGIN}${path}`, {
     method,
     headers,
     body: init.json !== undefined ? JSON.stringify(init.json) : (init.body ?? null),

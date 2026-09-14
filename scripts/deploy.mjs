@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Production deploy: Cloudflare Worker `mother-ai` from committed, pushed `main`.
+// Production deploy: Cloudflare Worker `mother-ai` (API) from committed, pushed `main`.
+// The UI is built and deployed by Vercel from the same `main` via its Git integration.
 //
 //   npm run deploy            # full: tests, build, migrations, deploy, verify
 //   npm run deploy -- --skip-tests
@@ -67,7 +68,6 @@ if (!args.has("--skip-tests")) {
   run("npm", ["run", "typecheck"], exportDir);
   run("npx", ["vitest", "run"], exportDir);
 }
-run("npx", ["vite", "build"], exportDir, { env: nodeOptions });
 
 // 4. Committed migrations only
 run("npx", ["wrangler", "d1", "migrations", "apply", "mother-ai-prod", "--remote"], exportDir, { env: { CI: "1", ...nodeOptions } });

@@ -37,7 +37,13 @@ async function cf(method, path, body) {
     headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const data = await res.json();
+  const text = await res.text();
+  // Some endpoints (e.g. DELETE workers/domains) answer 200 with an empty body.
+  if (!text) {
+    if (!res.ok) throw new Error(`${method} ${path} failed: HTTP ${res.status}`);
+    return null;
+  }
+  const data = JSON.parse(text);
   if (!data.success) throw new Error(`${method} ${path} failed: ${JSON.stringify(data.errors)}`);
   return data.result;
 }

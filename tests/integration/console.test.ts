@@ -351,10 +351,10 @@ describe("badge", () => {
     expect(svgText).toContain("AI Controls Active");
     expect(svgText).not.toContain(orgId);
 
+    // The verification page lives on the UI host (Vercel); the Worker redirects there.
     const page = await call(env, `/verify/${token}`);
-    expect(page.status).toBe(200);
-    expect(await page.text()).toContain("asset /verify/");
-    expect(page.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+    expect(page.status).toBe(308);
+    expect(page.headers.get("Location")).toBe(`${ORIGIN}/verify/${token}`);
     const verification = (await (await call(env, `/api/public/badges/${token}`, { host: API_ORIGIN })).json()) as Record<string, unknown>;
     expect(verification).toMatchObject({ status: "active", organization: { display_name: "Acme <Inc> & Co" } });
     expect(String(verification.disclaimer)).toContain("It is not a certification of the organization's entire cybersecurity program");
@@ -405,7 +405,6 @@ describe("badge", () => {
     const missing = await call(env, `/api/public/badges/${"A".repeat(32)}`, { host: API_ORIGIN });
     expect(missing.status).toBe(404);
     expect(await missing.json()).toMatchObject({ error: { code: "BADGE_NOT_FOUND" } });
-    // The UI page itself is a static shell; it renders "Verification not found" from the 404 above.
-    expect((await call(env, `/verify/${"A".repeat(32)}`)).status).toBe(200);
+    // The UI page renders "Verification not found" from the 404 above.
   });
 });

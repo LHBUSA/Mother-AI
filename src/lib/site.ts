@@ -25,23 +25,19 @@ export function isFallbackOrigin(url: URL): boolean {
   return FALLBACK_ORIGINS.has(url.origin);
 }
 
-/** Hosts that serve only machine traffic (API host and fallbacks). */
-export function isApiOnlyOrigin(url: URL): boolean {
-  return url.origin === API_ORIGIN || FALLBACK_ORIGINS.has(url.origin);
-}
-
 /** Human-facing paths that belong to the UI host. */
 function isHumanFacing(pathname: string): boolean {
   return pathname === "/" || pathname === "/index.html" || pathname === "/app" || pathname.startsWith("/app/") || pathname.startsWith("/verify/");
 }
 
 /**
- * 308 to the UI host for human-facing GET/HEAD requests arriving on an API-only host.
- * Path and query are preserved; browsers preserve the URL fragment across redirects.
+ * 308 to the UI host for human-facing GET/HEAD requests reaching this Worker (API host or
+ * fallbacks); the UI itself is served by Vercel. Path and query are preserved; browsers
+ * preserve the URL fragment across redirects, so old invite links keep working.
  */
 export function canonicalRedirect(request: Request): Response | null {
   const url = new URL(request.url);
-  if (!isApiOnlyOrigin(url)) return null;
+  if (url.origin === UI_ORIGIN) return null;
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   if (!isHumanFacing(url.pathname)) return null;
   return new Response(null, {

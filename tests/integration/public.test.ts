@@ -109,9 +109,9 @@ describe("health, headers and routing", () => {
     expect(ready.ready).toBe(true);
   });
 
-  it("applies security headers everywhere and serves the console shell for deep links", async () => {
+  it("applies security headers everywhere and serves no UI", async () => {
     const env = createEnv();
-    for (const path of ["/", "/app/policies/pol_x", "/health", "/api/demo/workspace", "/nope"]) {
+    for (const path of ["/health", "/api/demo/workspace", "/nope", "/robots.txt"]) {
       const res = await call(env, path);
       expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
       expect(res.headers.get("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
@@ -119,18 +119,17 @@ describe("health, headers and routing", () => {
       expect(res.headers.get("Strict-Transport-Security")).toContain("max-age=");
       expect(res.headers.get("Content-Security-Policy")).toContain("default-src 'self'");
     }
-    // HTML must be no-transform so zone edge features never inject scripts into Mother AI pages.
-    // (/nope is excluded: the mocked ASSETS binding has no 404.html, so it falls back to text/plain.)
-    for (const path of ["/", "/app/policies/pol_x", `/verify/${"A".repeat(32)}`]) {
-      expect((await call(env, path)).headers.get("Cache-Control")).toMatch(/no-transform/);
-    }
-    const deep = await call(env, "/app/policies/pol_x");
-    expect(deep.status).toBe(200);
-    expect(await deep.text()).toContain("asset /app/");
-    expect((await call(env, "/nope")).status).toBe(404);
+    const notFound = await call(env, "/nope");
+    expect(notFound.status).toBe(404);
+    expect(await notFound.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
     expect((await call(env, "/api/nope")).status).toBe(404);
-    const robots = await (await call(env, "/robots.txt")).text();
-    expect(robots).toContain("Disallow: /app/");
+    expect((await call(env, "/sitemap.xml")).status).toBe(404);
+    for (const path of ["/", "/app/", "/app/policies/pol_x", `/verify/${"A".repeat(32)}`]) {
+      const res = await call(env, path);
+      expect(res.status).toBe(308);
+      expect(res.headers.get("Location")).toBe(`${ORIGIN}${path}`);
+    }
+    expect(await (await call(env, "/robots.txt")).text()).toBe("User-agent: *\nDisallow: /\n");
   });
 
   it("never exposes stack traces", async () => {
@@ -159,11 +158,9 @@ describe("canonical host and workers.dev fallback", () => {
       expect(res.status).toBe(308);
       expect(res.headers.get("Location")).toBe(`${ORIGIN}${path}`);
     }
-    expect((await call(env, "/", {})).status).toBe(200);
     expect(await (await call(env, "/robots.txt", { host: FALLBACK_ORIGIN })).text()).toBe("User-agent: *\nDisallow: /\n");
     expect(await (await call(env, "/robots.txt", { host: API_ORIGIN })).text()).toBe("User-agent: *\nDisallow: /\n");
     expect((await call(env, "/app/login", { host: API_ORIGIN })).headers.get("Location")).toBe(`${ORIGIN}/app/login`);
-    expect(await (await call(env, "/robots.txt")).text()).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
   });
 
   it("keeps gateway, badge and health working on the fallback host", async () => {

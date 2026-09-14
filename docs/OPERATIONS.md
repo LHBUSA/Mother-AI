@@ -14,11 +14,10 @@ git checkout main && git pull --ff-only && git status
 | Worker | `mother-ai` | Gateway, auth, control-plane API, public browser APIs, badge SVGs, cron |
 | API host | `api.mother.proptechusa.ai` (Workers Custom Domain) | Browser and server API traffic |
 | D1 | `mother-ai-prod` → `DB` | Canonical data |
-| Static assets (Worker) | `dist/web` → `ASSETS` | Serves the UI on `mother.proptechusa.ai` only until the Vercel DNS cutover |
 | Rate limiting | `RL_*` (namespaces 4101–4107) | Abuse controls |
 | Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup |
 | Secret | `FORM_SIGNING_KEY` | Founding Access form tokens |
-| UI host | `mother.proptechusa.ai` | Public UI (Vercel after cutover) and WebAuthn RP ID |
+| UI host | `mother.proptechusa.ai` | Public UI on Vercel (DNS-only CNAME `78326c855bbef250.vercel-dns-016.com`) and WebAuthn RP ID |
 | Fallback host | `mother-ai.sales-fd3.workers.dev` | Operational API fallback; human pages 308 to the UI host |
 
 ## Onboard an organization
