@@ -5,7 +5,7 @@ import { Link } from "../lib/router";
 import { countdown, dateTime, relativeTime } from "../lib/format";
 import { useSession } from "../lib/session";
 import { IconApprovals, IconChevron } from "../components/icons";
-import { Alert, Button, Dialog, Empty, EnvTag, ErrorState, Field, Mono, PageHeader, Skeleton, Tabs, Tag, Textarea, cx, toast } from "../components/ui";
+import { Alert, Button, DecisionPill, Dialog, Empty, EnvTag, ErrorState, Field, Mono, PageHeader, Skeleton, StaleNotice, Tabs, Tag, Textarea, cx, toast } from "../components/ui";
 
 type Status = "pending" | "approved" | "denied" | "expired";
 
@@ -138,7 +138,10 @@ function ApprovalCard({ a, skewMs, onAct, canApprove }: { a: ApprovalItem; skewM
         <section className="approval-block approval-why">
           <h3 className="approval-label">Why Mother stopped it</h3>
           <p className="approval-reason">{d.reason}</p>
-          <Mono className="approval-code">{d.reason_code}</Mono>
+          <span className="approval-verdict">
+            <DecisionPill decision={d.decision} size="sm" />
+            <Mono className="approval-code">{d.reason_code}</Mono>
+          </span>
           <h3 className="approval-label mt-16">Policy</h3>
           {a.policy ? (
             <Link to={`/app/policies/${a.policy.id}`} className="approval-policy">
@@ -181,7 +184,7 @@ function ApprovalCard({ a, skewMs, onAct, canApprove }: { a: ApprovalItem; skewM
               </Button>
             </div>
           ) : (
-            <span className="muted small">Your role can't act on approvals.</span>
+            <span className="muted small">Approving or denying requires the Approver role or higher.</span>
           )}
         </footer>
       ) : (
@@ -217,7 +220,8 @@ export function ApprovalsPage() {
   useDocumentTitle("Approvals");
   const { can, setPendingApprovals } = useSession();
   const [tab, setTab] = useState<"pending" | "resolved" | "all">("pending");
-  const { data, error, loading, reload } = useApi<ApprovalsResponse>(`/api/console/approvals?status=${tab}`, [tab]);
+  const { data, error, loading, updatedAt, reload } = useApi<ApprovalsResponse>(`/api/console/approvals?status=${tab}`, [tab]);
+  const pageNow = useNow(30_000);
   const [skewMs, setSkewMs] = useState(0);
   const [acting, setActing] = useState<{ a: ApprovalItem; verb: "approve" | "deny" } | null>(null);
   const [note, setNote] = useState("");
@@ -231,8 +235,9 @@ export function ApprovalsPage() {
     setPendingApprovals(data.counts.pending ?? 0);
   }, [data, setPendingApprovals]);
 
-  const counts = data?.counts ?? {};
-  const resolvedCount = (counts.approved ?? 0) + (counts.denied ?? 0) + (counts.expired ?? 0);
+  // Counts only render once the API answered; a failed load never shows as zero.
+  const counts = data?.counts;
+  const resolvedCount = counts ? (counts.approved ?? 0) + (counts.denied ?? 0) + (counts.expired ?? 0) : undefined;
 
   const act = async () => {
     if (!acting) return;
@@ -258,23 +263,52 @@ export function ApprovalsPage() {
   return (
     <>
       <PageHeader title="Approvals" description="Actions that a policy routed to a human. Nothing executes until an approver says yes — and an approval can be used exactly once before its grant expires." />
+      <details className="how-review">
+        <summary>How review works</summary>
+        <ol className="how-review-steps">
+          <li>
+            <DecisionPill decision="review" size="sm" />
+            <span>A matching review policy answers the agent with <code className="mono-inline">decision: "review"</code> and an <code className="mono-inline">approval_id</code>. The agent must not act yet.</span>
+          </li>
+          <li>
+            <span className="how-n" aria-hidden="true">2</span>
+            <span>The request waits in this queue. An Approver, Security, Admin or Owner approves or denies it with an optional note. Unanswered requests expire after the approval window set in Settings.</span>
+          </li>
+          <li>
+            <span className="how-n" aria-hidden="true">3</span>
+            <span>The integration polls <code className="mono-inline">GET /v1/approvals/{"{id}"}</code>. If approved, it redeems the grant once with <code className="mono-inline">POST /v1/approvals/{"{id}"}/consume</code> before the grant expires.</span>
+          </li>
+        </ol>
+        <p className="muted small">Mother AI does not send Slack or email notifications for approvals. This queue refreshes every 15 seconds while it is open.</p>
+      </details>
       <Tabs
         label="Approval status"
         value={tab}
         onChange={setTab}
         tabs={[
-          { id: "pending", label: "Pending", count: counts.pending ?? 0 },
+          { id: "pending", label: "Pending", count: counts ? counts.pending ?? 0 : undefined },
           { id: "resolved", label: "Resolved", count: resolvedCount },
           { id: "all", label: "All" },
         ]}
       />
+      {error && data ? <StaleNotice error={error} onRetry={() => void reload()} updatedAt={updatedAt} now={pageNow} /> : null}
       {error && !data ? (
         <ErrorState error={error} onRetry={() => void reload()} />
       ) : loading && !data ? (
         <div className="card card-body"><Skeleton lines={6} /></div>
       ) : data && data.approvals.length === 0 ? (
         <div className="card">
-          <Empty icon={<IconApprovals width={22} height={22} />} title={tab === "pending" ? "No actions are waiting for approval" : "No approvals here yet"}>
+          <Empty
+            icon={<IconApprovals width={22} height={22} />}
+            title={tab === "pending" ? "No actions are waiting for approval" : "No approvals here yet"}
+            action={
+              tab === "pending" && (
+                <Link to="/app/policies" className="btn btn-secondary btn-sm">
+                  Review policies <IconChevron />
+                </Link>
+              )
+            }
+          >
             {tab === "pending" ? "When a review policy matches, the request appears here with who is asking, what it wants and why Mother stopped it." : "Approved, denied and expired requests are kept as evidence."}
           </Empty>
         </div>
@@ -306,7 +340,7 @@ export function ApprovalsPage() {
         <p className="small mb-12">
           {acting?.verb === "approve"
             ? "The agent receives a single-use grant. Your name, the time and your note are appended to the audit trail. The original decision is never modified."
-            : "The agent will be told this action was denied. Your name, the time and your note are appended to the audit trail."}
+            : "The integration sees this request as denied and cannot execute it. Your name, the time and your note are appended to the audit trail."}
         </p>
         <Field label="Note" htmlFor="ap-note" optional hint="Visible in the audit trail.">
           <Textarea id="ap-note" data-autofocus rows={3} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder={acting?.verb === "approve" ? "Verified with the customer on ticket #4821" : "Amount exceeds the customer's order total"} />

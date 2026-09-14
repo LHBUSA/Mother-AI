@@ -5,7 +5,7 @@ import { useQuery, useRouter } from "../lib/router";
 import { dateTime, duration, relativeTime, ROLE_LABEL } from "../lib/format";
 import { useSession } from "../lib/session";
 import { IconKey, IconPlus } from "../components/icons";
-import { Alert, Button, Card, ConfirmDialog, CopyButton, Dialog, Empty, ErrorState, Field, Input, Mono, PageHeader, Select, Skeleton, Tabs, Tag, Toggle, cx, toast } from "../components/ui";
+import { Alert, Button, Card, ConfirmDialog, CopyButton, Dialog, Empty, ErrorState, Field, Input, Mono, PageHeader, PermissionNotice, Select, Skeleton, Tabs, Tag, Toggle, cx, toast } from "../components/ui";
 
 type TabId = "organization" | "keys" | "members" | "security";
 
@@ -274,7 +274,7 @@ function CreateKeyDialog({ open, onClose, onCreated }: { open: boolean; onClose:
 }
 
 function KeysTab() {
-  const { can } = useSession();
+  const { can, session } = useSession();
   const now = useNow(30_000);
   const allowed = can("manage_keys");
   const { data, error, loading, reload } = useApi<{ keys: KeyItem[] }>(allowed ? "/api/console/keys" : null);
@@ -283,8 +283,8 @@ function KeysTab() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (!allowed) return <Alert tone="info">Only admins and owners can view or manage gateway API keys.</Alert>;
-  if (error && !data) return <ErrorState error={error} onRetry={() => void reload()} />;
+  if (!allowed) return <PermissionNotice what="Gateway API keys" requires="Admin" role={ROLE_LABEL[session.role]} />;
+  if (error && !data) return <ErrorState error={error} onRetry={() => void reload()} requires="Admin" />;
 
   const revoke = async () => {
     if (!revoking) return;

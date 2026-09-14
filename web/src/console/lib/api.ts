@@ -17,6 +17,8 @@ export class ApiFailure extends Error {
 
 type Method = "GET" | "POST" | "PUT" | "PATCH";
 
+export const REQUEST_TIMEOUT_MS = 20_000;
+
 let onUnauthenticated: (() => void) | null = null;
 export function setUnauthenticatedHandler(fn: () => void) {
   onUnauthenticated = fn;
@@ -29,14 +31,22 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
     init.headers = { ...init.headers, "Content-Type": "application/json" };
     init.body = JSON.stringify(opts.body ?? {});
   }
+  // Bounded: a hung request surfaces as TIMEOUT instead of an endless loading state.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  init.signal = controller.signal;
   let res: Response;
+  let text: string;
   try {
     res = await fetch(apiUrl(path), init);
+    text = await res.text();
   } catch {
+    if (controller.signal.aborted) throw new ApiFailure(0, "TIMEOUT", "Mother AI didn't respond in time. Retry in a moment.");
     throw new ApiFailure(0, "NETWORK_ERROR", "Mother AI could not be reached. Check your connection and retry.");
+  } finally {
+    clearTimeout(timer);
   }
   let data: unknown = null;
-  const text = await res.text();
   if (text) {
     try {
       data = JSON.parse(text);
@@ -75,6 +85,38 @@ export function errorMessage(err: unknown): string {
     return err.message;
   }
   return "Something went wrong.";
+}
+
+export type FailureKind = "unavailable" | "forbidden" | "suspended" | "rate_limited" | "not_found" | "unauthenticated" | "failed";
+
+export interface FailureInfo {
+  kind: FailureKind;
+  title: string;
+  text: string;
+  /** Error code and HTTP status only — never a response body. */
+  detail: string;
+}
+
+/** Classifies a failed load into one of the console's distinct, truthful states. */
+export function describeFailure(err: unknown): FailureInfo {
+  if (!(err instanceof ApiFailure)) {
+    return { kind: "failed", title: "Couldn't load this view", text: "Something went wrong in the console. Retry, or reload the page.", detail: "CLIENT_ERROR" };
+  }
+  const detail = err.status ? `HTTP ${err.status} · ${err.code}` : err.code;
+  if (err.status === 0 || err.status >= 500) {
+    return {
+      kind: "unavailable",
+      title: "Mother AI API unavailable",
+      text: err.code === "TIMEOUT" ? "The API didn't respond in time. Nothing is shown here rather than a guess." : "The console couldn't get an answer from the API. Nothing is shown here rather than a guess.",
+      detail,
+    };
+  }
+  if (err.status === 403 && err.code === "ORGANIZATION_SUSPENDED") return { kind: "suspended", title: "Organization suspended", text: err.message, detail };
+  if (err.status === 403) return { kind: "forbidden", title: "Permission required", text: err.message || "Your role can't open this view.", detail };
+  if (err.status === 429) return { kind: "rate_limited", title: "Rate limit reached", text: "Mother AI is limiting requests from this session. Wait a moment, then retry.", detail };
+  if (err.status === 404) return { kind: "not_found", title: "Not found", text: err.message || "This record doesn't exist in your organization.", detail };
+  if (err.status === 401) return { kind: "unauthenticated", title: "Session expired", text: "Sign in again to continue.", detail };
+  return { kind: "failed", title: "Couldn't load this view", text: err.message, detail };
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,8 @@ export interface Resource<T> {
   data: T | null;
   error: unknown;
   loading: boolean;
+  /** Epoch ms of the last successful load. */
+  updatedAt: number | null;
   reload: () => Promise<void>;
   setData: (d: T) => void;
 }
@@ -13,6 +15,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []): Resource<T
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState<boolean>(!!path);
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -24,6 +27,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []): Resource<T
       if (id === seq.current) {
         setData(result);
         setError(null);
+        setUpdatedAt(Date.now());
       }
     } catch (err) {
       if (id === seq.current) setError(err);
@@ -37,7 +41,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []): Resource<T
     void load();
   }, [load]);
 
-  return { data, error, loading, reload: load, setData };
+  return { data, error, loading, updatedAt, reload: load, setData };
 }
 
 /** Runs `fn` every `ms` while the document is visible. */

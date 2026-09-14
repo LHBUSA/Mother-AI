@@ -10,7 +10,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { createPortal } from "react-dom";
-import { errorMessage, type Decision } from "../lib/api";
+import { describeFailure, type Decision } from "../lib/api";
 import { IconCheck, IconClose, IconCopy, IconRefresh } from "./icons";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -35,9 +35,36 @@ export function Button({
   );
 }
 
+const DECISION_LABEL: Record<Decision, string> = { allow: "ALLOW", review: "REVIEW", block: "BLOCK" };
+
+/** Distinct shape per decision so status never depends on color: check, pause, stop. */
+export function DecisionGlyph({ decision }: { decision: Decision }) {
+  return (
+    <svg className="pill-glyph" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+      {decision === "allow" && <path d="M2.5 6.2 5 8.6l4.6-5.1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />}
+      {decision === "review" && (
+        <>
+          <circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M4.8 4.1v3.8M7.2 4.1v3.8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </>
+      )}
+      {decision === "block" && (
+        <>
+          <circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M2.9 9.1 9.1 2.9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function DecisionPill({ decision, size }: { decision: Decision; size?: "sm" }) {
-  const label = decision === "review" ? "REVIEW" : decision.toUpperCase();
-  return <span className={cx("pill", `pill-${decision}`, size === "sm" && "pill-sm")}>{label}</span>;
+  return (
+    <span className={cx("pill", `pill-${decision}`, size === "sm" && "pill-sm")}>
+      <DecisionGlyph decision={decision} />
+      {DECISION_LABEL[decision]}
+    </span>
+  );
 }
 
 export function EffectLabel({ effect }: { effect: Decision }) {
@@ -99,23 +126,72 @@ export function Empty({ title, children, action, icon }: { title: string; childr
   );
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({ error, onRetry, requires, compact }: { error: unknown; onRetry?: () => void; requires?: string; compact?: boolean }) {
+  const info = describeFailure(error);
+  const retryable = info.kind !== "forbidden" && info.kind !== "suspended" && info.kind !== "not_found" && info.kind !== "unauthenticated";
   return (
-    <div className="error-state" role="alert">
-      <p className="error-state-title">Couldn't load this view</p>
-      <p className="error-state-text">{errorMessage(error)}</p>
-      {onRetry && (
-        <Button size="sm" onClick={onRetry}>
-          <IconRefresh /> Retry
-        </Button>
-      )}
+    <div className={cx("error-state", `error-${info.kind}`, compact && "error-compact")} role="alert">
+      <div className="error-state-head">
+        <span className="error-state-icon" aria-hidden="true">
+          {info.kind === "forbidden" || info.kind === "suspended" ? "⊘" : info.kind === "rate_limited" ? "‖" : info.kind === "not_found" ? "?" : "!"}
+        </span>
+        <p className="error-state-title">{info.title}</p>
+      </div>
+      <p className="error-state-text">
+        {info.text}
+        {info.kind === "forbidden" && (requires ? ` This view requires the ${requires} role or higher — ask an owner or admin to change your role.` : " Ask an owner or admin if you need access.")}
+      </p>
+      <div className="error-state-foot">
+        {onRetry && retryable && (
+          <Button size="sm" onClick={onRetry}>
+            <IconRefresh /> Retry
+          </Button>
+        )}
+        <details className="error-detail">
+          <summary>Technical detail</summary>
+          <code className="mono-inline">{info.detail}</code>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+/** A view the current role can't open — known up front from the session, so no request is made. */
+export function PermissionNotice({ what, requires, role }: { what: string; requires: string; role?: string }) {
+  return (
+    <div className="error-state error-forbidden" role="status">
+      <div className="error-state-head">
+        <span className="error-state-icon" aria-hidden="true">⊘</span>
+        <p className="error-state-title">Permission required</p>
+      </div>
+      <p className="error-state-text">
+        {what} require{what.endsWith("s") ? "" : "s"} the {requires} role or higher{role ? ` — you're signed in as ${role}` : ""}. Ask an owner or admin to change your role.
+      </p>
+    </div>
+  );
+}
+
+/** Shown above data that is still on screen when a background refresh fails — old data is labelled, never passed off as live. */
+export function StaleNotice({ error, onRetry, updatedAt, now }: { error: unknown; onRetry: () => void; updatedAt: number | null; now: number }) {
+  const info = describeFailure(error);
+  const age = updatedAt ? Math.max(0, Math.round((now - updatedAt) / 60_000)) : null;
+  return (
+    <div className="stale-notice" role="status">
+      <span className="stale-icon" aria-hidden="true">!</span>
+      <span>
+        <strong>Refresh failed — {info.title.toLowerCase()}.</strong> Showing data loaded {age === null ? "earlier" : age < 1 ? "under a minute ago" : `${age} min ago`}; it may be out of date.
+      </span>
+      <Button size="sm" variant="ghost" onClick={onRetry}>
+        <IconRefresh /> Retry
+      </Button>
     </div>
   );
 }
 
 export function Skeleton({ lines = 3, height }: { lines?: number; height?: number }) {
   return (
-    <div className="skeleton" aria-busy="true" aria-label="Loading">
+    <div className="skeleton" role="status" aria-busy="true">
+      <span className="sr-only">Loading…</span>
       {Array.from({ length: lines }, (_, i) => (
         <div key={i} className="skeleton-line" style={{ height: height ?? 14, width: `${92 - ((i * 17) % 40)}%` }} />
       ))}

@@ -3,9 +3,9 @@ import { api, errorMessage, type Decision, type DecisionSummary } from "../lib/a
 import { useDocumentTitle, useNow } from "../lib/hooks";
 import { Link, useQuery, useRouter } from "../lib/router";
 import { dateTime, relativeTime } from "../lib/format";
-import { DecisionLine } from "../components/decisions";
-import { IconAudit, IconClose } from "../components/icons";
-import { Alert, Button, DecisionPill, DefinitionList, Empty, ErrorState, Input, JsonView, Mono, PageHeader, Select, Skeleton, Tabs, Tag, cx } from "../components/ui";
+import { ApprovalChip, DecisionLine } from "../components/decisions";
+import { IconAudit, IconChevron, IconClose } from "../components/icons";
+import { Alert, Button, CopyButton, DecisionPill, DefinitionList, Empty, ErrorState, Input, JsonView, Mono, PageHeader, Select, Skeleton, Tabs, Tag, cx } from "../components/ui";
 
 type Row = DecisionSummary & { policy_name: string | null; approval_status: string | null };
 
@@ -53,16 +53,19 @@ function DecisionDetailPanel({ id, onClose }: { id: string; onClose: () => void 
   return (
     <div className="detail-panel" role="region" aria-label="Decision detail">
       <div className="detail-head">
-        <div>
+        <div className="detail-id">
           <div className="page-eyebrow">Decision evidence</div>
-          <Mono>{id}</Mono>
+          <span className="detail-id-row">
+            <Mono>{id}</Mono>
+            <CopyButton text={id} label="Copy ID" />
+          </span>
         </div>
         <button type="button" className="icon-btn" onClick={onClose} aria-label="Close detail">
           <IconClose />
         </button>
       </div>
       {error ? (
-        <ErrorState error={error} onRetry={load} />
+        <ErrorState error={error} onRetry={load} compact />
       ) : !data ? (
         <Skeleton lines={10} />
       ) : (
@@ -73,10 +76,18 @@ function DecisionDetailPanel({ id, onClose }: { id: string; onClose: () => void 
             <p>{data.decision.reason}</p>
           </div>
 
-          <h3 className="subhead">Request</h3>
+          <h3 className="subhead">Who asked</h3>
           <DefinitionList
             items={[
               ["Agent", <Mono key="a">{data.decision.agent_key}</Mono>],
+              ["Integration (API key)", data.decision.api_key ? <span key="k"><Mono>{data.decision.api_key.key_prefix}…</Mono> <Tag>{data.decision.api_key.environment}</Tag></span> : "—"],
+            ]}
+          />
+          <p className="muted small detail-note">Mother AI records the calling agent and the API key it used. Any end-user identity exists only if the integration sent it in context.</p>
+
+          <h3 className="subhead">Request</h3>
+          <DefinitionList
+            items={[
               ["Protocol", data.decision.protocol.toUpperCase()],
               ["Action", <Mono key="c">{`${data.decision.capability} · ${data.decision.operation}`}</Mono>],
               ...(data.decision.protocol === "mcp" ? ([["MCP", <Mono key="m">{`${data.decision.mcp_server} / ${data.decision.mcp_tool}`}</Mono>]] as Array<[string, React.ReactNode]>) : []),
@@ -86,7 +97,6 @@ function DecisionDetailPanel({ id, onClose }: { id: string; onClose: () => void 
               ["Environment", data.decision.environment ?? "—"],
               ["Request id", <Mono key="q">{data.decision.request_id}</Mono>],
               ["Recorded", dateTime(data.decision.created_at)],
-              ["API key", data.decision.api_key ? <span key="k"><Mono>{data.decision.api_key.key_prefix}…</Mono> <Tag>{data.decision.api_key.environment}</Tag></span> : "—"],
             ]}
           />
 
@@ -107,18 +117,34 @@ function DecisionDetailPanel({ id, onClose }: { id: string; onClose: () => void 
           )}
 
           <h3 className="subhead">Context</h3>
-          {data.decision.context_captured ? <JsonView value={data.decision.context} /> : <Alert tone="info">Context was not captured for this decision because audit capture was disabled at the time.</Alert>}
+          {data.decision.context_captured ? (
+            <JsonView value={data.decision.context} />
+          ) : (
+            <Alert tone="info">Context was not captured for this decision because audit capture was disabled at the time.</Alert>
+          )}
 
           {data.policy_snapshot && (
-            <>
-              <h3 className="subhead">Policy at version {String(data.policy_snapshot.version ?? data.decision.policy_version)}</h3>
+            <details className="detail-disclosure">
+              <summary>Policy definition at version {String(data.policy_snapshot.version ?? data.decision.policy_version)}</summary>
               <JsonView value={data.policy_snapshot} />
-            </>
+            </details>
           )}
 
           {data.approval && (
             <>
               <h3 className="subhead">Approval</h3>
+              <div className="detail-approval">
+                <ApprovalChip status={data.approval.status} />
+                {data.approval.status === "approved" && (
+                  <span className="muted small">
+                    {data.approval.consumed_at
+                      ? `Grant consumed by the integration ${dateTime(data.approval.consumed_at)}`
+                      : data.approval.executable && data.approval.grant_expires_at
+                        ? `Grant usable once until ${dateTime(data.approval.grant_expires_at)}`
+                        : "Grant expired without being consumed"}
+                  </span>
+                )}
+              </div>
               <ol className="timeline">
                 <li>
                   <span className="tl-dot tl-review" />
@@ -158,7 +184,7 @@ function DecisionDetailPanel({ id, onClose }: { id: string; onClose: () => void 
               ["Engine", <Mono key="e">{data.decision.engine_version}</Mono>],
               ["Policy evaluation", data.decision.eval_ms === null ? "—" : `${data.decision.eval_ms < 1 ? "<1" : data.decision.eval_ms} ms (server-measured)`],
               ["Gateway (pre-write)", data.decision.gateway_ms === null ? "—" : `${data.decision.gateway_ms} ms (server-measured)`],
-              ["Request fingerprint", <Mono key="f" className="break">{data.decision.request_fingerprint}</Mono>],
+              ["Request fingerprint", <span key="f" className="detail-fp"><Mono className="break">{data.decision.request_fingerprint}</Mono><CopyButton text={data.decision.request_fingerprint} label="Copy" /></span>],
             ]}
           />
           <p className="muted small">Decision records are append-only. Approval actions are appended as separate events; this record is never rewritten.</p>
@@ -242,6 +268,8 @@ export function AuditPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   const filterString = FILTER_KEYS.map((k) => `${k}=${query.get(k) ?? ""}`).join("&");
 
@@ -278,7 +306,7 @@ export function AuditPage() {
     return () => {
       cancelled = true;
     };
-  }, [buildApiQuery, tab]);
+  }, [buildApiQuery, tab, attempt]);
 
   const setParams = (patch: Record<string, string | null>) => {
     const p = new URLSearchParams(location.search);
@@ -303,12 +331,13 @@ export function AuditPage() {
   const loadMore = async () => {
     if (!cursor) return;
     setLoadingMore(true);
+    setMoreError(null);
     try {
       const r = await api<{ decisions: Row[]; next_cursor: string | null }>(buildApiQuery(cursor));
       setRows((cur) => [...(cur ?? []), ...r.decisions]);
       setCursor(r.next_cursor);
     } catch (err) {
-      setError(errorMessage(err));
+      setMoreError(errorMessage(err));
     } finally {
       setLoadingMore(false);
     }
@@ -368,11 +397,21 @@ export function AuditPage() {
           <div className={cx("audit-layout", openId && "has-detail")}>
             <div className="card audit-list">
               {error && !rows ? (
-                <ErrorState error={error} onRetry={() => setParams({})} />
+                <ErrorState error={error} onRetry={() => setAttempt((n) => n + 1)} />
               ) : !rows ? (
                 <div className="card-body"><Skeleton lines={8} /></div>
               ) : rows.length === 0 ? (
-                <Empty icon={<IconAudit width={22} height={22} />} title={activeFilters ? "No decisions match these filters" : "No decisions recorded yet"}>
+                <Empty
+                  icon={<IconAudit width={22} height={22} />}
+                  title={activeFilters ? "No decisions match these filters" : "No decisions recorded yet"}
+                  action={
+                    activeFilters ? (
+                      <Button size="sm" variant="secondary" onClick={clearFilters}>Clear filters</Button>
+                    ) : (
+                      <Link to="/app/integrations" className="btn btn-secondary btn-sm">Connect an agent <IconChevron /></Link>
+                    )
+                  }
+                >
                   {activeFilters ? "Try widening the date range or clearing a filter." : "Every gateway evaluation — allow, review or block — is recorded here before the agent receives its answer."}
                 </Empty>
               ) : (
@@ -382,9 +421,10 @@ export function AuditPage() {
                       <DecisionLine key={d.id} d={d} now={now} active={openId === d.id} onOpen={() => setParams({ open: openId === d.id ? null : d.id })} />
                     ))}
                   </div>
-                  {cursor && (
+                  {(cursor || moreError) && (
                     <div className="load-more">
-                      <Button onClick={() => void loadMore()} loading={loadingMore}>Load more</Button>
+                      {moreError && <p className="small load-more-error" role="alert">Couldn't load more: {moreError}</p>}
+                      {cursor && <Button onClick={() => void loadMore()} loading={loadingMore}>{moreError ? "Retry" : "Load more"}</Button>}
                     </div>
                   )}
                 </>

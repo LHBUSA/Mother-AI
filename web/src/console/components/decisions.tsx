@@ -1,9 +1,41 @@
+import { useEffect, useState } from "react";
 import type { Decision, DecisionSummary } from "../lib/api";
 import { relativeTime, dateTime } from "../lib/format";
 import { Link } from "../lib/router";
-import { DecisionPill, cx } from "./ui";
+import { IconCheck, IconCopy } from "./icons";
+import { DecisionPill, copyText, cx } from "./ui";
 
-export function DecisionLine({ d, now, onOpen, active }: { d: DecisionSummary & { policy_name?: string | null; approval_status?: string | null }; now: number; onOpen?: () => void; active?: boolean }) {
+export type DecisionRowData = DecisionSummary & { policy_name?: string | null; approval_status?: string | null };
+
+export const APPROVAL_LABEL: Record<string, string> = {
+  pending: "Awaiting approval",
+  approved: "Approved",
+  denied: "Denied",
+  expired: "Expired",
+};
+
+export function ApprovalChip({ status }: { status: string }) {
+  return <span className={cx("dl-approval", `ap-${status}`)}>{APPROVAL_LABEL[status] ?? status}</span>;
+}
+
+/** Last characters of an id, with the full id on hover and a copy action. Never nested inside another control. */
+export function IdCopy({ id, label = "decision ID" }: { id: string; label?: string }) {
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!done) return;
+    const t = window.setTimeout(() => setDone(false), 1600);
+    return () => window.clearTimeout(t);
+  }, [done]);
+  return (
+    <button type="button" className={cx("id-copy", done && "is-done")} title={id} aria-label={done ? `Copied ${label}` : `Copy ${label} ${id}`} onClick={async () => setDone(await copyText(id))}>
+      <span className="id-copy-text mono">…{id.slice(-6)}</span>
+      {done ? <IconCheck width={12} height={12} /> : <IconCopy width={12} height={12} />}
+    </button>
+  );
+}
+
+export function DecisionLine({ d, now, onOpen, active }: { d: DecisionRowData; now: number; onOpen?: () => void; active?: boolean }) {
+  const mcpTarget = d.protocol === "mcp" && (d.mcp_server || d.mcp_tool) ? `${d.mcp_server ?? "?"}/${d.mcp_tool ?? "?"}` : null;
   const content = (
     <>
       <span className={cx("tl-rail", `tl-${d.decision}`)} aria-hidden="true" />
@@ -12,41 +44,58 @@ export function DecisionLine({ d, now, onOpen, active }: { d: DecisionSummary & 
       </span>
       <span className="dl-main">
         <span className="dl-action">
-          <span className="mono">{d.capability}</span>
-          <span className="dl-sep">·</span>
-          <span className="mono">{d.operation}</span>
-          {d.protocol === "mcp" && <span className="tag tag-mcp">MCP</span>}
+          <span className="mono dl-act-text" title={`${d.capability} · ${d.operation}`}>
+            {d.capability}
+            <span className="dl-sep" aria-hidden="true"> · </span>
+            {d.operation}
+          </span>
+          {d.protocol === "mcp" && (
+            <span className="tag tag-mcp" title={mcpTarget ? `MCP ${mcpTarget}` : "MCP"}>
+              MCP
+            </span>
+          )}
         </span>
         <span className="dl-sub">
           <span className="mono dl-agent">{d.agent_key}</span>
-          {d.resource && (
+          {(d.resource || mcpTarget) && (
             <>
-              <span className="dl-sep">→</span>
-              <span className="mono dl-resource">{d.resource}</span>
+              <span className="dl-sep" aria-hidden="true">→</span>
+              <span className="mono dl-resource" title={d.resource ?? mcpTarget ?? undefined}>
+                {d.resource ?? mcpTarget}
+              </span>
             </>
           )}
         </span>
       </span>
-      <span className="dl-reason mono" title={d.reason}>
-        {d.reason_code}
-        {d.approval_status && <span className={cx("dl-approval", `ap-${d.approval_status}`)}>{d.approval_status}</span>}
+      <span className="dl-reason">
+        <span className="mono dl-code" title={d.reason}>
+          {d.reason_code}
+        </span>
+        <span className="dl-why">
+          {d.approval_status && <ApprovalChip status={d.approval_status} />}
+          <span className="dl-policy" title={d.policy_name ?? d.reason}>
+            {d.policy_name ?? d.reason}
+          </span>
+        </span>
       </span>
       <time className="dl-time" dateTime={d.created_at} title={dateTime(d.created_at)}>
         {relativeTime(d.created_at, now)}
       </time>
     </>
   );
-  if (onOpen) {
-    return (
-      <button type="button" className={cx("decision-line", active && "is-active")} onClick={onOpen} aria-expanded={active}>
-        {content}
-      </button>
-    );
-  }
   return (
-    <Link to={`/app/audit?q=${encodeURIComponent(d.id)}&open=${encodeURIComponent(d.id)}`} className="decision-line">
-      {content}
-    </Link>
+    <div className={cx("decision-row", active && "is-active")}>
+      {onOpen ? (
+        <button type="button" className={cx("decision-line", active && "is-active")} onClick={onOpen} aria-expanded={active}>
+          {content}
+        </button>
+      ) : (
+        <Link to={`/app/audit?q=${encodeURIComponent(d.id)}&open=${encodeURIComponent(d.id)}`} className="decision-line">
+          {content}
+        </Link>
+      )}
+      <IdCopy id={d.id} />
+    </div>
   );
 }
 
@@ -60,7 +109,7 @@ export function MiniBars({ allow, review, block }: Record<Decision, number>) {
         {review > 0 && <span className="mb-review" style={{ flexGrow: review }} />}
         {block > 0 && <span className="mb-block" style={{ flexGrow: block }} />}
       </span>
-      <span className="minibars-legend mono">
+      <span className="minibars-legend mono" aria-hidden="true">
         <span className="t-allow">{allow}</span>
         <span className="t-review">{review}</span>
         <span className="t-block">{block}</span>
