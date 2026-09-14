@@ -20,6 +20,8 @@ preview_urls = false
 routes = [
   { pattern = "mother.proptechusa.ai", custom_domain = true },
   { pattern = "mother.proptechusa.ai/*", zone_name = "proptechusa.ai" },
+  # Path-specific counterpart for `*proptechusa.ai/news/*`, which outranks a host-only pattern.
+  { pattern = "mother.proptechusa.ai/news/*", zone_name = "proptechusa.ai" },
 ]
 
 [assets]
