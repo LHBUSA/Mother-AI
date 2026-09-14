@@ -22,18 +22,18 @@ function siteMeta(): Plugin {
 }
 
 export default defineConfig({
-  root: resolve(__dirname, "web"),
-  publicDir: resolve(__dirname, "web/public"),
+  root: resolve(import.meta.dirname, "web"),
+  publicDir: resolve(import.meta.dirname, "web/public"),
   plugins: [react(), siteMeta()],
   build: {
-    outDir: resolve(__dirname, "dist/web"),
+    outDir: resolve(import.meta.dirname, "dist/web"),
     emptyOutDir: true,
     sourcemap: false,
     assetsDir: "assets",
     rollupOptions: {
       input: {
-        marketing: resolve(__dirname, "web/index.html"),
-        console: resolve(__dirname, "web/app/index.html"),
+        marketing: resolve(import.meta.dirname, "web/index.html"),
+        console: resolve(import.meta.dirname, "web/app/index.html"),
       },
     },
   },

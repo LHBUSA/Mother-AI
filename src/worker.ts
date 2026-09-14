@@ -21,6 +21,7 @@ import { routeConsole } from "./api/console/index";
 import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken, health, ready } from "./api/public";
 import { handleBadgeSvg, handleVerifyPage } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
+import { robotsTxt, sitemapXml } from "./lib/seo";
 
 const BADGE_SVG = /^\/badge\/([0-9A-Za-z]{1,64})\.svg$/;
 const VERIFY = /^\/verify\/([0-9A-Za-z]{1,64})\/?$/;
@@ -67,6 +68,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (pathname.startsWith("/api/")) return handleApi(request, env, nowMs, ctx);
   if (pathname === "/health") return health(env, nowMs);
   if (pathname === "/ready") return ready(env);
+  if (pathname === "/robots.txt") return robotsTxt();
+  if (pathname === "/sitemap.xml") return sitemapXml();
 
   const badge = BADGE_SVG.exec(pathname);
   if (badge) return request.method === "GET" || request.method === "HEAD" ? handleBadgeSvg(request, env, badge[1]!, nowMs, ctx) : methodNotAllowed(["GET"]);

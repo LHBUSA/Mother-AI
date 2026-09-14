@@ -8,5 +8,6 @@ dist/
 *.log
 coverage/
 qa-artifacts/
+.deploy/
 .DS_Store
 Thumbs.db
