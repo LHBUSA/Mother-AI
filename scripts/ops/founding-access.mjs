@@ -22,7 +22,7 @@ if (!remote && !args.local) {
 const QA_FILTER = `company LIKE '%(internal)' AND work_email LIKE 'qa+%@localhomebuyersusa.com'`;
 
 if (command === "list") {
-  console.table(query(`SELECT id, created_at, company, work_email, agent_count, uses_mcp, turnstile, status FROM founding_access_requests ORDER BY created_at DESC LIMIT 100`, { remote }));
+  console.table(query(`SELECT id, created_at, company, work_email, agent_count, uses_mcp, status FROM founding_access_requests ORDER BY created_at DESC LIMIT 100`, { remote }));
 } else if (command === "set-status") {
   if (!/^fa_[0-9A-Za-z]{22}$/.test(args.id ?? "") || !["new", "contacted", "onboarded", "declined", "spam"].includes(args.status)) {
     console.error("Usage: set-status --id fa_… --status new|contacted|onboarded|declined|spam");

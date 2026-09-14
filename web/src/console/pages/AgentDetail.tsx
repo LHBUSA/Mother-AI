@@ -1,3 +1,4 @@
+import { API_ORIGIN } from "../../shared/site";
 import { useEffect, useState } from "react";
 import { api, errorMessage, type Agent, type Decision, type DecisionSummary } from "../lib/api";
 import { useApi, useDocumentTitle, useNow } from "../lib/hooks";
@@ -52,7 +53,7 @@ export function AgentDetailPage({ id }: { id: string }) {
     }
   };
 
-  const origin = window.location.origin;
+  const origin = API_ORIGIN;
   const curl = `curl -X POST ${origin}/v1/evaluate \\
   -H "Authorization: Bearer $MOTHER_AI_API_KEY" \\
   -H "Content-Type: application/json" \\

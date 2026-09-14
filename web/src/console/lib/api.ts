@@ -1,4 +1,7 @@
-// Same-origin JSON client for the control-plane API.
+// JSON client for the control-plane API on the Mother AI API host (see web/src/shared/site.ts).
+// Calls go directly to the Worker with credentials so the host-only session cookie is sent.
+
+import { apiUrl } from "../../shared/site";
 
 export class ApiFailure extends Error {
   constructor(
@@ -21,14 +24,14 @@ export function setUnauthenticatedHandler(fn: () => void) {
 
 export async function api<T>(path: string, opts: { method?: Method; body?: unknown; allow401?: boolean } = {}): Promise<T> {
   const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
-  const init: RequestInit = { method, credentials: "same-origin", headers: { Accept: "application/json" } };
+  const init: RequestInit = { method, credentials: "include", headers: { Accept: "application/json" } };
   if (method !== "GET") {
     init.headers = { ...init.headers, "Content-Type": "application/json" };
     init.body = JSON.stringify(opts.body ?? {});
   }
   let res: Response;
   try {
-    res = await fetch(path, init);
+    res = await fetch(apiUrl(path), init);
   } catch {
     throw new ApiFailure(0, "NETWORK_ERROR", "Mother AI could not be reached. Check your connection and retry.");
   }

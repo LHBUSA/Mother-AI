@@ -38,7 +38,7 @@ export function createEnv(overrides: Partial<Env> = {}): TestEnv {
   const assets = {
     fetch: async (input: Request | string) => {
       const url = new URL(typeof input === "string" ? input : input.url);
-      if (url.pathname === "/" || url.pathname === "/app/") {
+      if (url.pathname === "/" || url.pathname === "/app/" || url.pathname === "/verify/") {
         return new Response(`<!doctype html><title>asset ${url.pathname}</title>`, { headers: { "Content-Type": "text/html" } });
       }
       return new Response("not found", { status: 404 });

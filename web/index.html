@@ -650,7 +650,7 @@
                 <span class="mono">before-tool-call.ts</span>
               </div>
 <pre class="code__body"><code><span class="c-c">// Ask Mother before your MCP client executes a tool call.</span>
-<span class="c-kw">const</span> res = <span class="c-kw">await</span> fetch(<span class="c-s">"%SITE_ORIGIN%/v1/mcp/evaluate"</span>, {
+<span class="c-kw">const</span> res = <span class="c-kw">await</span> fetch(<span class="c-s">"%SITE_API_ORIGIN%/v1/mcp/evaluate"</span>, {
   method: <span class="c-s">"POST"</span>,
   headers: {
     Authorization: <span class="c-s">`Bearer ${process.env.MOTHER_API_KEY}`</span>,
@@ -855,7 +855,7 @@
               <div class="snippet">
                 <div class="snippet__head"><span class="mono">embed.html</span></div>
 <pre><code><span class="c-t">&lt;a</span> <span class="c-a">href</span>=<span class="c-s">"%SITE_ORIGIN%/verify/TOKEN"</span><span class="c-t">&gt;</span>
-  <span class="c-t">&lt;img</span> <span class="c-a">src</span>=<span class="c-s">"%SITE_ORIGIN%/badge/TOKEN.svg"</span>
+  <span class="c-t">&lt;img</span> <span class="c-a">src</span>=<span class="c-s">"%SITE_API_ORIGIN%/badge/TOKEN.svg"</span>
        <span class="c-a">alt</span>=<span class="c-s">"Mother AI Protected — AI Controls Active"</span><span class="c-t">&gt;</span>
 <span class="c-t">&lt;/a&gt;</span></code></pre>
               </div>
@@ -974,7 +974,6 @@
                 <div class="hp" aria-hidden="true">
                   <label>Website <input name="website" tabindex="-1" autocomplete="off" /></label>
                 </div>
-                <div class="field--full fa__turnstile" data-turnstile hidden></div>
               </div>
               <div class="fa__foot">
                 <button class="btn btn--primary btn--lg" type="submit" data-fa-submit>Request Founding Access</button>

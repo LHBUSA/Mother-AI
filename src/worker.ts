@@ -7,7 +7,7 @@
 //   /api/founding-access public early-access capture
 //   /api/public/badges/{t} public verification data (for the UI /verify page)
 //   /badge/{token}.svg   live badge
-//   /verify/{token}      public verification page
+//   /verify/{token}      public verification page (UI shell; data from /api/public/badges)
 //   /health, /ready      service health
 //   /app/*               control-plane SPA (static assets)
 //   everything else      marketing site (static assets)
@@ -20,7 +20,7 @@ import { routeV1 } from "./api/v1";
 import { routeAuth } from "./auth/passkeys";
 import { routeConsole } from "./api/console/index";
 import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken, health, ready } from "./api/public";
-import { handleBadgeSvg, handlePublicBadge, handleVerifyPage } from "./badge/routes";
+import { handleBadgeSvg, handlePublicBadge } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
 import { robotsTxt, sitemapXml } from "./lib/seo";
 import { canonicalRedirect } from "./lib/site";
@@ -49,9 +49,9 @@ async function handleApi(request: Request, env: Env, nowMs: number, ctx: Executi
   }
 }
 
-async function serveConsoleShell(request: Request, env: Env): Promise<Response> {
+async function serveUiShell(request: Request, env: Env, shell: "/app/" | "/verify/"): Promise<Response> {
   const url = new URL(request.url);
-  const res = await env.ASSETS.fetch(new Request(new URL("/app/", url.origin), { headers: request.headers }));
+  const res = await env.ASSETS.fetch(new Request(new URL(shell, url.origin), { headers: request.headers }));
   const out = new Response(res.body, res);
   out.headers.set("Cache-Control", "no-cache");
   out.headers.set("X-Robots-Tag", "noindex, nofollow");
@@ -83,14 +83,15 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   const badge = BADGE_SVG.exec(pathname);
   if (badge) return request.method === "GET" || request.method === "HEAD" ? handleBadgeSvg(request, env, badge[1]!, nowMs, ctx) : methodNotAllowed(["GET"]);
   const verify = VERIFY.exec(pathname);
-  if (verify) return request.method === "GET" || request.method === "HEAD" ? handleVerifyPage(request, env, verify[1]!, nowMs, ctx) : methodNotAllowed(["GET"]);
+  // The verification page is part of the UI build; it reads /api/public/badges/{token} from the API.
+  if (verify) return request.method === "GET" || request.method === "HEAD" ? serveUiShell(request, env, "/verify/") : methodNotAllowed(["GET"]);
 
   if (request.method !== "GET" && request.method !== "HEAD") return methodNotAllowed(["GET"]);
 
   if (pathname === "/app") return Response.redirect(new URL("/app/", url.origin).toString(), 308);
   if (pathname.startsWith("/app/")) {
     const isAsset = /\.[A-Za-z0-9]{1,8}$/.test(pathname);
-    if (!isAsset) return serveConsoleShell(request, env);
+    if (!isAsset) return serveUiShell(request, env, "/app/");
   }
 
   const asset = await env.ASSETS.fetch(request);

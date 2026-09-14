@@ -1,3 +1,4 @@
+import { API_ORIGIN } from "../../shared/site";
 import { useState } from "react";
 import { useDocumentTitle } from "../lib/hooks";
 import { Link } from "../lib/router";
@@ -178,7 +179,7 @@ export function IntegrationsPage() {
   useDocumentTitle("Integrations");
   const { can } = useSession();
   const [lang, setLang] = useState<Lang>("rest");
-  const origin = window.location.origin;
+  const origin = API_ORIGIN;
   const s = snippets(origin);
 
   return (

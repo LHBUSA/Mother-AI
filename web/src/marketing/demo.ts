@@ -1,3 +1,4 @@
+import { apiUrl } from "../shared/site";
 import { escapeHtml, highlightJson, readError } from "./util";
 
 type Decision = "allow" | "review" | "block";
@@ -229,8 +230,9 @@ export function initDemo(): void {
 
     const t0 = performance.now();
     try {
-      const res = await fetch("/api/demo/evaluate", {
+      const res = await fetch(apiUrl("/api/demo/evaluate"), {
         method: "POST",
+        credentials: "omit",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(body),
       });
@@ -282,7 +284,7 @@ export function initDemo(): void {
 
   const loadWorkspace = async () => {
     try {
-      const res = await fetch("/api/demo/workspace", { headers: { Accept: "application/json" } });
+      const res = await fetch(apiUrl("/api/demo/workspace"), { credentials: "omit", headers: { Accept: "application/json" } });
       if (!res.ok) throw new Error(String(res.status));
       const data = (await res.json()) as Workspace;
       const agents = Array.isArray(data.agents) ? data.agents : [];

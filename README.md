@@ -8,7 +8,8 @@ AI agents now hold real credentials to CRMs, databases, payment systems, interna
 
 Zero-trust access control and observability for autonomous agents. No "rogue AI detection", no LLM deciding what production operations are permitted.
 
-Production: **https://mother.proptechusa.ai** (operational fallback for API/badge traffic: `https://mother-ai.sales-fd3.workers.dev`)
+- UI: **https://mother.proptechusa.ai** (Vercel project `mother`)
+- API: **https://api.mother.proptechusa.ai** (Cloudflare Worker `mother-ai`; operational fallback `https://mother-ai.sales-fd3.workers.dev`)
 
 ---
 
@@ -29,23 +30,27 @@ Docs: [API](docs/API.md) · [Security model](docs/SECURITY_MODEL.md) · [Badge](
 
 ## Architecture
 
-One Cloudflare Worker. No microservices, no other hosting platform.
+GitHub is the source of truth, Vercel hosts the public UI, one Cloudflare Worker is the backend (API, auth, control plane, cron), D1 holds V1 data.
 
 ```
-                     ┌──────────────────────────── Worker: mother-ai ───────────────────────────┐
- agents / SDKs ──►   │ /v1/evaluate, /v1/mcp/evaluate, /v1/approvals/*   (API key)                │
- console (browser) ► │ /api/auth/*  (passkeys)    /api/console/*  (session, RBAC, CSRF)            │ ──► D1 mother-ai-prod
- public ──────────►  │ /api/demo/*  /api/founding-access   /badge/{t}.svg   /verify/{t}  /health   │
-                     │ Workers Static Assets: marketing site (/) + console SPA (/app/*)            │
-                     └────────────────────────────────────────────────────────────────────────────┘
-                        Workers Rate Limiting bindings · cron */10 (approval expiry, session cleanup)
+ browser (mother.proptechusa.ai, Vercel: marketing, console SPA, /verify)
+    │  fetch, directly (never proxied), CORS exact-origin
+    ▼
+ Worker mother-ai (api.mother.proptechusa.ai) ─────────────────────────────────► D1 mother-ai-prod
+   /api/auth/*, /api/console/*                 session cookie, RBAC, CSRF (credentialed CORS)
+   /api/demo/*, /api/founding-access[/token],  public browser APIs (non-credentialed CORS)
+   /api/public/badges/{token}
+   /v1/evaluate, /v1/mcp/evaluate, /v1/approvals/*   API key, server-to-server, no CORS
+   /badge/{token}.svg, /health, /ready              cron */10 (approval expiry, session cleanup)
+ agents / SDKs ──► /v1/*
 ```
 
-- **Cloudflare Workers** — runtime, gateway, API, security headers.
-- **Workers Static Assets** — `dist/web` built by Vite (marketing: vanilla TS; console: React).
+- **Vercel** (`mother`, Git-linked to this repo, `vercel.json`) — static Vite build in `dist/web`: marketing site, console SPA (`/app/*`), badge verification page (`/verify/*`), robots/sitemap, security headers and CSP. `/badge/*.svg` redirects (308) to the API host.
+- **Cloudflare Worker** (`mother-ai`) — gateway, passkey auth, control-plane API, public browser APIs, badge SVGs, cron. Browsers call it directly so rate limits and IP hashing see the real client IP.
 - **Cloudflare D1** (`mother-ai-prod`, binding `DB`) — canonical data. Schema changes only via committed `migrations/`.
-- **KV** — intentionally not used in V1. The gateway loads key, organization, agent, policies and any prior decision in **one** D1 batch; a KV policy cache would add a staleness window to security decisions for little gain at current scale. It can be added later with D1 remaining canonical.
-- **GitHub** — source of truth. **No GitHub Actions.** Deploys are direct Wrangler deploys from pushed `main`.
+- **Hosts** live only in `config/site.json` (`origin`, `apiOrigin`, `fallbackOrigins`). Passkeys (WebAuthn RP ID) are bound to the UI origin, not the API host.
+- **KV** — intentionally not used in V1. The gateway loads key, organization, agent, policies and any prior decision in **one** D1 batch.
+- **GitHub** — source of truth. **No GitHub Actions.** Vercel builds `main` through its Git integration; the Worker deploys with Wrangler from pushed `main` (`npm run deploy`).
 
 ## Directory structure
 
@@ -134,8 +139,8 @@ Production must always correspond to committed, pushed `main`.
 ## Production verification
 
 ```bash
-curl -s https://mother.proptechusa.ai/health   # status, version, commit, policy_engine, d1
-curl -s https://mother.proptechusa.ai/ready    # d1, schema, form_signing, turnstile
+curl -s https://api.mother.proptechusa.ai/health   # status, version, commit, policy_engine, d1
+curl -s https://api.mother.proptechusa.ai/ready    # d1, schema, form_signing
 node scripts/qa/verify-prod.mjs                           # gateway/console/badge proof against production
 ```
 

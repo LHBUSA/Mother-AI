@@ -54,40 +54,52 @@ It does not detect intent, "rogue AI", consciousness or sentience, and it does n
 
 ## Control-plane authentication
 
-- **Passkeys (WebAuthn) only.** No passwords are stored. User verification is required. Accounts are created only by redeeming a single-use invite (72 h expiry) that registers a passkey bound to the Mother AI origin.
+- **Passkeys (WebAuthn) only.** No passwords are stored. User verification is required. Accounts are created only by redeeming a single-use invite (72 h expiry) that registers a passkey bound to the UI origin `https://mother.proptechusa.ai` (RP ID `mother.proptechusa.ai`). The ceremony endpoints live on the API host, but the RP ID and expected origin are fixed to the UI origin and never derived from the request host.
 - Invite tokens travel in the URL **fragment** (`#token=`), which browsers do not send to servers or logs; only SHA-256 digests are stored.
 - WebAuthn challenges are stored server-side, single-use, 5-minute expiry, referenced by an HttpOnly cookie.
-- Sessions: 256-bit random token in a `__Host-mai_session` cookie (`HttpOnly; Secure; SameSite=Strict; Path=/`), 12 h absolute and 2 h idle expiry, revocable, digest stored.
-- CSRF: `SameSite=Strict`, plus every cookie-authenticated mutation requires an exact `Origin` match and a same-origin `Sec-Fetch-Site` when present.
+- Sessions: 256-bit random token in a host-only `__Host-mai_session` cookie on the API host (`HttpOnly; Secure; SameSite=Strict; Path=/`, no `Domain`), 12 h absolute and 2 h idle expiry, revocable, digest stored. The UI never reads it; it calls the API with `credentials: "include"`. `SameSite=Strict` still applies because the UI and API hosts are the same site (`proptechusa.ai`).
+- CSRF: `SameSite=Strict`, plus every cookie-authenticated mutation (and every passkey ceremony) requires `Origin` to exactly equal `https://mother.proptechusa.ai` and, when present, `Sec-Fetch-Site: same-site` or `same-origin`. Other proptechusa.ai subdomains are same-site but are rejected by the exact Origin check.
 - Roles: `viewer` (read) < `approver` (approve/deny) < `security` (agents, policies) < `admin` (keys, badge, settings, members) < `owner`. Members cannot grant roles above their own, modify themselves, or remove the last owner. Enforced server-side.
 - Cloudflare Access was evaluated for the first release; the available Cloudflare credentials did not include Access configuration scope, so passkeys were implemented rather than weakening authentication.
 
 ## Secrets
 
-- No secrets in Git or in the browser bundle. Worker secrets: `FORM_SIGNING_KEY` (Founding Access form timing tokens), optional `TURNSTILE_SECRET_KEY`.
+- No secrets in Git or in the browser bundle. Worker secret: `FORM_SIGNING_KEY` (Founding Access form timing tokens and the IP-hash salt). The Vercel UI needs no secrets.
 - API keys are never logged. Stored `context`/`resource` are redacted (see `src/lib/redact.ts`). Error responses never include stack traces or internal messages.
 - Raw client IPs are not stored for Founding Access; a daily-salted hash is.
 
 ## Transport and browser hardening
 
-Every response: `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation, payment, USB disabled). Pages additionally send `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` and a CSP:
+Every response (Vercel UI via `vercel.json`, Worker via `src/lib/security-headers.ts`): `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera, microphone, geolocation, payment, USB disabled), `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy: same-origin`, and a CSP that allows only the Mother API as an extra origin:
 
 ```
-default-src 'self'; script-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline';
-img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src https://challenges.cloudflare.com;
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: https://api.mother.proptechusa.ai; font-src 'self'; connect-src 'self' https://api.mother.proptechusa.ai;
 frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
 ```
 
+`/app/*` and `/verify/*` are `noindex`.
+
 Badge SVGs are the exception: embeddable (`Cross-Origin-Resource-Policy: cross-origin`, no frame restrictions) with `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'`.
 
-**CORS:** none. `/v1/*` is server-to-server; the console API is same-origin only.
+**CORS** (Worker, `src/lib/cors.ts`) is endpoint-specific and never a wildcard:
+
+| Endpoints | Allowed origin | Credentials |
+|---|---|---|
+| `/api/auth/*`, `/api/console/*` | `https://mother.proptechusa.ai` only | yes |
+| `/api/demo/*`, `/api/founding-access`, `/api/founding-access/token`, `/api/public/badges/*` | `https://mother.proptechusa.ai` only | no |
+| `/v1/evaluate`, `/v1/mcp/evaluate`, `/v1/approvals/*` | none (server-to-server) | — |
+| `/badge/*.svg` | image embed (CORP cross-origin), no CORS | — |
+
+Preflights from other origins get `403` with no CORS headers. Browser API traffic is never proxied through Vercel, so the Worker sees the real client IP for rate limits and IP hashing.
 
 ## Abuse controls
 
 - Gateway: per-IP limit before key lookup, per-key limit after.
 - Public demo: per-IP limit; stateless; runs against a fixed in-code workspace and never touches tenant data.
-- Founding Access: per-IP limit, HMAC-signed form token (minimum 3 s, maximum 2 h age), honeypot field, 24 h duplicate suppression, strict validation, optional Cloudflare Turnstile (enforced automatically when `TURNSTILE_SECRET_KEY` is set).
+- Founding Access: 5/min per-IP limit, HMAC-signed form token (minimum 3 s, maximum 2 h age), honeypot field, 24 h duplicate suppression, strict validation, daily-salted IP hash (raw IPs are not stored). No CAPTCHA/Turnstile is used.
 - Sign-in: per-IP limit; single-use challenges.
+- Public badge verification (`/badge/*.svg`, `/api/public/badges/*`): per-IP limit.
 - Request bodies ≤ 32 KB; `context` ≤ 8 KB, depth ≤ 6.
 
 Workers Rate Limiting counters are per Cloudflare location and eventually consistent. They are abuse controls, not exact quotas.

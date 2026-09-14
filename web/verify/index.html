@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#07080a" />
+    <title>Mother AI verification</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="/"><img src="/brand/mark.svg" alt="" width="26" height="26" />Mother AI</a>
+        <span class="eyebrow">Public verification</span>
+      </header>
+
+      <main id="verify" class="card s-loading" aria-live="polite" aria-busy="true">
+        <section class="head">
+          <div class="status-row">
+            <span class="eyebrow">Mother AI Protected</span>
+            <span class="pill" role="status"><i></i><span data-pill>CHECKING</span></span>
+          </div>
+          <h1 data-title>Verifying…</h1>
+          <p class="org" data-org hidden>Organization: <strong data-org-name></strong></p>
+          <p class="summary" data-summary>Checking this badge against Mother AI.</p>
+        </section>
+        <section class="body" data-body hidden>
+          <div data-controls-wrap>
+            <h2>Controls</h2>
+            <ul data-controls></ul>
+          </div>
+          <dl class="meta" data-meta></dl>
+          <div class="badge" data-badge hidden>
+            <img data-badge-img alt="" width="236" height="48" />
+            <span class="muted">Badge state is rendered live by Mother AI.</span>
+          </div>
+        </section>
+        <p class="disclaimer" data-disclaimer>
+          Mother AI Protected indicates that this organization has configured and enabled Mother AI agent access controls. It is not a certification of the organization's entire cybersecurity program or a guarantee against security incidents.
+        </p>
+      </main>
+
+      <noscript>
+        <main class="card s-invalid noscript">
+          <section class="head">
+            <div class="status-row">
+              <span class="eyebrow">Mother AI Protected</span>
+              <span class="pill"><i></i>NOT VERIFIED</span>
+            </div>
+            <h1>JavaScript is required to verify this badge</h1>
+            <p class="summary">
+              This page checks the badge live against Mother AI. Enable JavaScript and reload. Until the check completes, do not treat a displayed badge as evidence of Mother AI controls.
+            </p>
+          </section>
+        </main>
+      </noscript>
+
+      <footer class="foot">
+        <span>Verified by Mother AI</span>
+        <span><a href="/">What is Mother AI?</a> · <a href="https://github.com/LHBUSA/Mother-AI/blob/main/docs/BADGE.md">Badge criteria</a></span>
+      </footer>
+    </div>
+    <script type="module" src="/src/verify/main.ts"></script>
+  </body>
+</html>

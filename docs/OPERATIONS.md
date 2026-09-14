@@ -10,15 +10,16 @@ git checkout main && git pull --ff-only && git status
 
 | Resource | Name / binding | Purpose |
 |---|---|---|
-| Worker | `mother-ai` | Entire product (gateway, console, APIs, assets, badge) |
+| Vercel project | `mother` (`prj_X2FC6nkIrBzxyZz1I1C8BKtCv9J9`), Git-linked to `LHBUSA/Mother-AI` | Public UI: marketing, console SPA, `/verify`, robots/sitemap (`vercel.json`, output `dist/web`) |
+| Worker | `mother-ai` | Gateway, auth, control-plane API, public browser APIs, badge SVGs, cron |
+| API host | `api.mother.proptechusa.ai` (Workers Custom Domain) | Browser and server API traffic |
 | D1 | `mother-ai-prod` → `DB` | Canonical data |
-| Static assets | `dist/web` → `ASSETS` | Marketing site + console SPA |
+| Static assets (Worker) | `dist/web` → `ASSETS` | Serves the UI on `mother.proptechusa.ai` only until the Vercel DNS cutover |
 | Rate limiting | `RL_*` (namespaces 4101–4107) | Abuse controls |
 | Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup |
 | Secret | `FORM_SIGNING_KEY` | Founding Access form tokens |
-| Secrets (optional) | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | Turnstile on Founding Access (enforced only when both are set) |
-| Custom domain | `mother.proptechusa.ai` (zone `proptechusa.ai`) | Canonical public host |
-| Fallback host | `mother-ai.sales-fd3.workers.dev` | Gateway/API/badge traffic; human pages 308 to canonical |
+| UI host | `mother.proptechusa.ai` | Public UI (Vercel after cutover) and WebAuthn RP ID |
+| Fallback host | `mother-ai.sales-fd3.workers.dev` | Operational API fallback; human pages 308 to the UI host |
 
 ## Onboard an organization
 
@@ -56,31 +57,12 @@ node scripts/ops/set-org-status.mjs --slug acme --status revoked --reason "Contr
 
 The change and reason are appended to the organization's control events. Revocation also ends all console sessions.
 
-## Turnstile
+## Hosting topology
 
-The Wrangler OAuth token has no Turnstile (challenge widgets) permission, so the widget is created in the dashboard:
-
-1. Cloudflare dashboard → account `Sales@localhomebuyersusa.com's Account` → **Turnstile** → **Add widget**.
-2. Widget name `Mother AI Founding Access`; **Hostname management** → add `mother.proptechusa.ai`; **Widget mode** → **Managed**; pre-clearance **No**. Create.
-3. Store both values as Worker secrets (you will be prompted; nothing touches Git):
-
-   ```bash
-   npx wrangler secret put TURNSTILE_SITE_KEY
-   npx wrangler secret put TURNSTILE_SECRET_KEY
-   ```
-
-4. `curl https://mother.proptechusa.ai/ready` reports `"turnstile":"enforced"`. With only one key set it reports `misconfigured` and Founding Access fails closed.
-
-Server-side verification rejects missing, invalid, expired and already-redeemed tokens, and tokens whose `hostname` is not the canonical host. If siteverify is unreachable the submission fails closed (503).
-
-## Custom domain
-
-`mother.proptechusa.ai` is a Workers Custom Domain on the `mother-ai` Worker, declared in `wrangler.toml` (`routes`, `custom_domain = true`); `wrangler deploy` manages its DNS record and certificate.
-
-- `config/site.json` `origin` is the single source for canonical/OG URLs, sitemap/robots, badge and verify URLs, invite URLs and the WebAuthn relying party.
-- `fallbackOrigins` (workers.dev) keeps serving `/v1/*`, `/api/*`, `/badge/*.svg`, `/health`; `/`, `/app/*` and `/verify/*` redirect (308) to the canonical host; robots.txt disallows everything there.
-- Passkeys are hostname-bound: sign-in works only on the canonical host. Moving hosts again requires new passkeys (issue invites with `scripts/ops/invite.mjs`).
-- Deploys verify `/health` on the canonical host and every fallback host.
+- `config/site.json` is the only place hosts live: `origin` (UI, WebAuthn RP), `apiOrigin` (Worker), `fallbackOrigins`.
+- UI builds (`npm run build` → `dist/web`) are deployed by Vercel from `main`. The Worker is deployed with `npm run deploy` from pushed `main`. Ship backward-compatible Worker changes before UI changes that depend on them.
+- The zone `proptechusa.ai` has wildcard Worker routes for other products (`*proptechusa.ai/sitemap.xml`, `/site-map`, `/news/*`). Mother hosts served by the Worker are pinned with host routes in `wrangler.toml`. The Vercel UI record must be **DNS-only** so zone routes and Web Analytics injection never apply to it.
+- No Turnstile or other CAPTCHA is used.
 
 ## Rollback
 

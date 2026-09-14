@@ -1,14 +1,5 @@
 import { readError } from "./util";
-
-interface TurnstileApi {
-  render: (el: HTMLElement, opts: Record<string, unknown>) => string;
-  reset: (id?: string) => void;
-}
-declare global {
-  interface Window {
-    turnstile?: TurnstileApi;
-  }
-}
+import { apiUrl } from "../shared/site";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const AGENT_COUNTS = ["1-5", "6-25", "26-100", "100+", "unknown"];
@@ -23,13 +14,9 @@ export function initFoundingAccess(): void {
   const submit = root.querySelector<HTMLButtonElement>("[data-fa-submit]")!;
   const status = root.querySelector<HTMLElement>("[data-fa-status]")!;
   const done = root.querySelector<HTMLElement>("[data-fa-done]")!;
-  const turnstileBox = root.querySelector<HTMLElement>("[data-turnstile]")!;
 
   let formToken: string | null = null;
   let tokenPromise: Promise<void> | null = null;
-  let turnstileToken: string | null = null;
-  let turnstileId: string | undefined;
-  let turnstileConfigured = false;
   let busy = false;
 
   const el = (name: string) =>
@@ -40,46 +27,14 @@ export function initFoundingAccess(): void {
     status.classList.toggle("is-error", error);
   };
 
-  const loadTurnstile = (siteKey: string) => {
-    turnstileConfigured = true;
-    turnstileBox.hidden = false;
-    const renderWidget = () => {
-      if (!window.turnstile || turnstileId !== undefined) return;
-      turnstileId = window.turnstile.render(turnstileBox, {
-        sitekey: siteKey,
-        theme: "dark",
-        callback: (token: string) => {
-          turnstileToken = token;
-        },
-        "expired-callback": () => {
-          turnstileToken = null;
-        },
-        "error-callback": () => {
-          turnstileToken = null;
-        },
-      });
-    };
-    if (window.turnstile) {
-      renderWidget();
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.defer = true;
-    script.addEventListener("load", renderWidget);
-    document.head.appendChild(script);
-  };
-
   const fetchToken = (): Promise<void> => {
     if (tokenPromise) return tokenPromise;
     tokenPromise = (async () => {
       try {
-        const res = await fetch("/api/founding-access/token", { headers: { Accept: "application/json" } });
+        const res = await fetch(apiUrl("/api/founding-access/token"), { credentials: "omit", headers: { Accept: "application/json" } });
         if (!res.ok) throw new Error(String(res.status));
-        const data = (await res.json()) as { form_token?: string; turnstile_site_key?: string | null };
+        const data = (await res.json()) as { form_token?: string };
         formToken = data.form_token ?? null;
-        if (data.turnstile_site_key) loadTurnstile(data.turnstile_site_key);
       } catch {
         tokenPromise = null; // allow retry on submit
       }
@@ -165,19 +120,14 @@ export function initFoundingAccess(): void {
         setStatus("We couldn't prepare the form. Please try again in a moment.", true);
         return;
       }
-      if (turnstileConfigured && !turnstileToken) {
-        setStatus("Please complete the verification check.", true);
-        return;
-      }
-
-      const res = await fetch("/api/founding-access", {
+      const res = await fetch(apiUrl("/api/founding-access"), {
         method: "POST",
+        credentials: "omit",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           ...values,
           form_token: formToken,
           website: el("website").value,
-          ...(turnstileToken ? { turnstile_token: turnstileToken } : {}),
         }),
       });
 
@@ -189,17 +139,16 @@ export function initFoundingAccess(): void {
       }
 
       const err = await readError(res);
-      if (err.status === 400) {
+      if (err.status === 400 && (err.code === "FORM_EXPIRED" || err.code === "FORM_TOO_FAST")) {
+        // Signed form token expired or submitted too quickly: fetch a fresh token and let the visitor retry.
+        formToken = null;
+        tokenPromise = null;
+        setStatus(err.message || "Please try again.", true);
+      } else if (err.status === 400) {
         if (err.fields) {
           for (const [name, message] of Object.entries(err.fields)) setFieldError(name, message);
         }
         setStatus(err.message || "Please check the highlighted fields.", true);
-      } else if (err.status === 403) {
-        setStatus("Verification failed. Please refresh the page and try again.", true);
-        formToken = null;
-        tokenPromise = null;
-        if (turnstileId !== undefined) window.turnstile?.reset(turnstileId);
-        turnstileToken = null;
       } else if (err.status === 429) {
         setStatus("Too many attempts. Please wait a minute and try again.", true);
       } else {

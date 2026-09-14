@@ -18,7 +18,6 @@ import {
   type BadgeStatus,
 } from "./status";
 import { renderBadgeSvg, type BadgeTheme } from "./svg";
-import { renderInvalidVerifyPage, renderVerifyPage } from "./verify-page";
 
 type BadgeLookup = { badge: BadgeRow; org: OrganizationRow; facts: BadgeFacts; status: BadgeStatus };
 
@@ -66,25 +65,6 @@ export async function handleBadgeSvg(request: Request, env: Env, token: string, 
     return new Response(null, { status: 304, headers: { ...headers, ETag: etag } });
   }
   return new Response(body, { status: found ? 200 : 404, headers: { ...headers, ETag: etag } });
-}
-
-export async function handleVerifyPage(request: Request, env: Env, token: string, nowMs: number, ctx: ExecutionContext): Promise<Response> {
-  const headers = { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" };
-  if (await limited(request, env)) {
-    return new Response("Too many requests", { status: 429, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-  }
-  const found = await lookupBadge(env, token, nowMs, ctx);
-  if (!found) return new Response(renderInvalidVerifyPage(), { status: 404, headers });
-  const html = renderVerifyPage({
-    organizationName: found.org.display_name,
-    status: found.status,
-    criteria: badgeCriteria(found.org, found.facts),
-    checkedAt: iso(nowMs),
-    activatedAt: found.badge.activated_at,
-    lastActivity: found.facts.last_activity,
-    token,
-  });
-  return new Response(html, { status: 200, headers });
 }
 
 /**

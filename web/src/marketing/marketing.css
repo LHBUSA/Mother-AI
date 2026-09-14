@@ -2758,9 +2758,6 @@ select:disabled {
   height: 1px;
   overflow: hidden;
 }
-.fa__turnstile {
-  min-height: 65px;
-}
 .fa__foot {
   display: flex;
   align-items: center;

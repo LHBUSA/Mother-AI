@@ -162,17 +162,17 @@ export function BadgePage() {
             {b ? (
               <>
                 <div className="badge-swatch swatch-dark">
-                  <img src={`/badge/${b.token}.svg?v=${cacheBust}`} alt="Mother AI badge preview on dark background" width={236} height={48} />
+                  <img src={`${b.svg_url}?v=${cacheBust}`} alt="Mother AI badge preview on dark background" width={236} height={48} />
                 </div>
                 <div className="badge-swatch swatch-light">
-                  <img src={`/badge/${b.token}.svg?theme=light&v=${cacheBust}`} alt="Mother AI badge preview on light background" width={236} height={48} />
+                  <img src={`${b.svg_light_url}&v=${cacheBust}`} alt="Mother AI badge preview on light background" width={236} height={48} />
                 </div>
                 <div className="verify-url">
                   <div className="field-label">Public verification URL</div>
                   <div className="verify-url-row">
                     <Mono className="truncate">{b.verify_url}</Mono>
                     <CopyButton text={b.verify_url} />
-                    <a className="btn btn-ghost btn-sm" href={`/verify/${b.token}`} target="_blank" rel="noreferrer">
+                    <a className="btn btn-ghost btn-sm" href={b.verify_url} target="_blank" rel="noreferrer">
                       Open <IconExternal />
                     </a>
                   </div>

@@ -353,14 +353,12 @@ describe("badge", () => {
 
     const page = await call(env, `/verify/${token}`);
     expect(page.status).toBe(200);
-    const html = await page.text();
-    expect(html).toContain("Mother AI Protected");
-    expect(html).toContain("ACTIVE");
-    expect(html).toContain("Acme &lt;Inc&gt; &amp; Co");
-    expect(html).not.toContain("Acme <Inc>");
-    expect(html).toContain("It is not a certification of the organization&#39;s entire cybersecurity program");
-    expect(html).not.toContain(orgId);
+    expect(await page.text()).toContain("asset /verify/");
     expect(page.headers.get("Content-Security-Policy")).toContain("frame-ancestors 'none'");
+    const verification = (await (await call(env, `/api/public/badges/${token}`, { host: API_ORIGIN })).json()) as Record<string, unknown>;
+    expect(verification).toMatchObject({ status: "active", organization: { display_name: "Acme <Inc> & Co" } });
+    expect(String(verification.disclaimer)).toContain("It is not a certification of the organization's entire cybersecurity program");
+    expect(JSON.stringify(verification)).not.toContain(orgId);
   });
 
   it("suspends when a control is disabled after activation, and when suspended manually", async () => {
@@ -371,9 +369,9 @@ describe("badge", () => {
     await call(env, "/api/console/settings", { cookie: owner.cookie, method: "PATCH", json: { audit_enabled: false } });
     const svg = await (await call(env, `/badge/${badge.token}.svg`)).text();
     expect(svg).toContain("Protection suspended");
-    const page = await (await call(env, `/verify/${badge.token}`)).text();
-    expect(page).toContain("SUSPENDED");
-    expect(page).toContain("Audit logging enabled <span");
+    const suspended = (await (await call(env, `/api/public/badges/${badge.token}`, { host: API_ORIGIN })).json()) as { status: string; controls: Array<{ label: string; met: boolean }> };
+    expect(suspended.status).toBe("suspended");
+    expect(suspended.controls.find((c) => c.label === "Audit logging enabled")?.met).toBe(false);
 
     await call(env, "/api/console/settings", { cookie: owner.cookie, method: "PATCH", json: { audit_enabled: true } });
     expect(await (await call(env, `/badge/${badge.token}.svg`)).text()).toContain("AI Controls Active");
@@ -394,7 +392,7 @@ describe("badge", () => {
     expect(rotated.badge.token).not.toBe(first.badge.token);
     expect(rotated.status).toBe("active");
     expect(await (await call(env, `/badge/${first.badge.token}.svg`)).text()).toContain("Badge revoked");
-    expect(await (await call(env, `/verify/${first.badge.token}`)).text()).toContain("REVOKED");
+    expect(await (await call(env, `/api/public/badges/${first.badge.token}`, { host: API_ORIGIN })).json()).toMatchObject({ status: "revoked", controls: [] });
 
     await env.DB.prepare(`UPDATE organizations SET status = 'revoked' WHERE id = ?`).bind(orgId).run();
     expect(await (await call(env, `/badge/${rotated.badge.token}.svg`)).text()).toContain("Badge revoked");
@@ -404,9 +402,10 @@ describe("badge", () => {
     const svg = await call(env, `/badge/${"A".repeat(32)}.svg`);
     expect(svg.status).toBe(404);
     expect(await svg.text()).toContain("Unverified badge");
-    const page = await call(env, `/verify/${"A".repeat(32)}`);
-    expect(page.status).toBe(404);
-    expect(await page.text()).toContain("Verification not found");
-    expect((await call(env, `/verify/not-a-token`)).status).toBe(404);
+    const missing = await call(env, `/api/public/badges/${"A".repeat(32)}`, { host: API_ORIGIN });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ error: { code: "BADGE_NOT_FOUND" } });
+    // The UI page itself is a static shell; it renders "Verification not found" from the 404 above.
+    expect((await call(env, `/verify/${"A".repeat(32)}`)).status).toBe(200);
   });
 });

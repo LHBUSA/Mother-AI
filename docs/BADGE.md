@@ -37,7 +37,7 @@ Evaluation order: revoked → suspended → active → (suspended if previously 
 
 - The embed is a **live SVG** rendered by the Worker on every request from current database state. There is no static image file.
 - `Cache-Control: no-cache, max-age=0` with a state-based `ETag` makes browsers revalidate every view, so state changes show on the next page load.
-- The badge links to `/verify/{token}`, which is rendered with `Cache-Control: no-store`.
+- The badge links to `/verify/{token}`, which reads live state from `/api/public/badges/{token}` (`Cache-Control: no-store`).
 - A screenshot of a green badge is not verifiable: the linked verification page shows the real state, and an unknown token shows "Verification not found".
 - Third-party caches (for example image proxies used by some Markdown renderers) are outside Mother AI's control; the verification page is authoritative.
 
@@ -51,9 +51,10 @@ Evaluation order: revoked → suspended → active → (suspended if previously 
 
 | Endpoint | Description |
 |---|---|
-| `GET /badge/{token}.svg` | Dark badge (default). Public, embeddable (`Cross-Origin-Resource-Policy: cross-origin`). |
-| `GET /badge/{token}.svg?theme=light` | Light badge. |
-| `GET /verify/{token}` | Public verification page (on the fallback host this redirects to the canonical host): organization display name, status, controls, last verified time, last gateway activity (date), first activation date, engine version, disclaimer. `noindex`. |
+| `GET https://api.mother.proptechusa.ai/badge/{token}.svg` | Dark badge (default), rendered by the Worker. Public, embeddable (`Cross-Origin-Resource-Policy: cross-origin`). `https://mother.proptechusa.ai/badge/{token}.svg` and the workers.dev host keep working (the UI host 308-redirects to the API host). |
+| `GET https://api.mother.proptechusa.ai/badge/{token}.svg?theme=light` | Light badge. |
+| `GET https://mother.proptechusa.ai/verify/{token}` | Public verification page (Vercel UI): organization display name, status, controls, last verified time, last gateway activity (date), first activation date, engine version, disclaimer. `noindex`. Requires JavaScript; without it the page states the badge is not verified. |
+| `GET https://api.mother.proptechusa.ai/api/public/badges/{token}` | The page's data source: read-only JSON, `no-store`, rate limited per client IP, CORS for the UI origin only, no internal ids. `404 BADGE_NOT_FOUND` for unknown tokens; the page never shows a verified state unless this returns `status: "active"`. |
 
 Rate limit: 300 requests/minute per IP across badge and verification endpoints.
 
@@ -62,14 +63,14 @@ Rate limit: 300 requests/minute per IP across badge and verification endpoints.
 Markdown:
 
 ```markdown
-[![Mother AI Protected — AI Controls Active](https://mother.proptechusa.ai/badge/TOKEN.svg)](https://mother.proptechusa.ai/verify/TOKEN)
+[![Mother AI Protected — AI Controls Active](https://api.mother.proptechusa.ai/badge/TOKEN.svg)](https://mother.proptechusa.ai/verify/TOKEN)
 ```
 
 HTML:
 
 ```html
 <a href="https://mother.proptechusa.ai/verify/TOKEN">
-  <img src="https://mother.proptechusa.ai/badge/TOKEN.svg" alt="Mother AI Protected — AI Controls Active" width="236" height="48">
+  <img src="https://api.mother.proptechusa.ai/badge/TOKEN.svg" alt="Mother AI Protected — AI Controls Active" width="236" height="48">
 </a>
 ```
 

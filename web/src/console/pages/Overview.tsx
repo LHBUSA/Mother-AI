@@ -1,3 +1,4 @@
+import { API_ORIGIN } from "../../shared/site";
 import { useEffect, useState } from "react";
 import type { BadgeStatus, DecisionSummary } from "../lib/api";
 import { useApi, useDocumentTitle, useNow, useVisibleInterval } from "../lib/hooks";
@@ -108,7 +109,7 @@ export function OverviewPage() {
     if (data) setPendingApprovals(data.pending_approvals);
   }, [data, setPendingApprovals]);
 
-  const origin = window.location.origin;
+  const origin = API_ORIGIN;
   const curl = `curl -X POST ${origin}/v1/evaluate \\
   -H "Authorization: Bearer $MOTHER_AI_API_KEY" \\
   -H "Content-Type: application/json" \\
