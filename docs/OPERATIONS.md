@@ -15,9 +15,10 @@ git checkout main && git pull --ff-only && git status
 | API host | `api.mother.proptechusa.ai` (Workers Custom Domain) | Browser and server API traffic |
 | D1 | `mother-ai-prod` → `DB` | Canonical data |
 | Rate limiting | `RL_*` (namespaces 4101–4107) | Abuse controls |
-| Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup |
+| Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup, approval notification retries and resolution events |
 | Secret | `FORM_SIGNING_KEY` | Founding Access form tokens and IP-hash salt |
 | Secret | `SLACK_LEADS_WEBHOOK_URL` | Slack Incoming Webhook for `#leads` (new Founding Access leads) |
+| Secret | `NOTIFICATION_ENCRYPTION_KEY` | 32-byte base64url AES-GCM key that encrypts each organization's approval-notification webhook in D1 |
 | UI host | `mother.proptechusa.ai` | Public UI on Vercel (DNS-only CNAME `78326c855bbef250.vercel-dns-016.com`) and WebAuthn RP ID |
 | Fallback host | `mother-ai.sales-fd3.workers.dev` | Operational API fallback; human pages 308 to the UI host |
 
@@ -56,6 +57,20 @@ npx wrangler secret put SLACK_LEADS_WEBHOOK_URL --name mother-ai
 ```
 
 The booking link shown after submission and in Slack is `bookingUrl` in `config/site.json` (https://calendly.com/proptechusa/new-meeting-1).
+
+## Approval notifications (per organization)
+
+Customers connect their own Slack incoming webhook in **Settings → Notifications** (Admin or Owner). It is completely separate from `SLACK_LEADS_WEBHOOK_URL`, which only ever serves `#leads`.
+
+- The webhook is validated (`https://hooks.slack.com/services/T…/B…/…` only), encrypted with `NOTIFICATION_ENCRYPTION_KEY` bound to the organization and channel id, and never returned by any API or written to logs or control events.
+- Configure, replace, remove and test sends are control events (`notifications.slack_*`), without the destination.
+- Delivery records: `approval_notifications` (one row per approval, event and channel) and the append-only `approval_notification_attempts`.
+
+```bash
+npx wrangler d1 execute mother-ai-prod --remote --command "SELECT n.queued_at, o.slug, n.event, n.status, n.attempts, n.last_http_status, n.last_error FROM approval_notifications n JOIN organizations o ON o.id = n.organization_id ORDER BY n.queued_at DESC LIMIT 50"
+```
+
+`NOTIFICATION_ENCRYPTION_KEY` is backed up outside Git (`D:\Workers\secrets\`). If it is lost or rotated, stored webhooks can no longer be decrypted: deliveries record `FAILED DESTINATION_UNREADABLE` (never a changed decision) until each admin reconnects Slack.
 
 ## Suspend or revoke an organization
 

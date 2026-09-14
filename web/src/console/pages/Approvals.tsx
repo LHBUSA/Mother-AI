@@ -4,6 +4,7 @@ import { useApi, useDocumentTitle, useNow, useVisibleInterval } from "../lib/hoo
 import { Link } from "../lib/router";
 import { countdown, dateTime, relativeTime } from "../lib/format";
 import { useSession } from "../lib/session";
+import { describeNotificationError, STATUS_LABEL as NOTIFY_LABEL, STATUS_TONE as NOTIFY_TONE, type NotificationSettings, type NotificationStatus } from "../lib/notifications";
 import { IconApprovals, IconChevron } from "../components/icons";
 import { Alert, Button, DecisionPill, Dialog, Empty, EnvTag, ErrorState, Field, Mono, PageHeader, Skeleton, StaleNotice, Tabs, Tag, Textarea, cx, toast } from "../components/ui";
 
@@ -23,6 +24,7 @@ interface ApprovalItem {
   decision: DecisionSummary & { context: Record<string, unknown> | null };
   policy: { id: string; name: string | null; effect: string | null; version: number | null } | null;
   agent: { display_name: string | null; environment: string | null };
+  notification: { channel: "slack"; status: NotificationStatus; error: string | null } | null;
 }
 
 interface ApprovalsResponse {
@@ -165,6 +167,14 @@ function ApprovalCard({ a, skewMs, onAct, canApprove }: { a: ApprovalItem; skewM
               <dt>Request id</dt>
               <dd className="mono truncate" title={d.request_id}>{d.request_id}</dd>
             </div>
+            {a.notification && (
+              <div>
+                <dt>Slack alert</dt>
+                <dd title={describeNotificationError(a.notification.error) ?? undefined}>
+                  <Tag tone={NOTIFY_TONE[a.notification.status]}>{NOTIFY_LABEL[a.notification.status]}</Tag>
+                </dd>
+              </div>
+            )}
           </dl>
         </section>
       </div>
@@ -202,7 +212,7 @@ function ApprovalCard({ a, skewMs, onAct, canApprove }: { a: ApprovalItem; skewM
           {status === "approved" && (
             <span className="small">
               {a.consumed_at ? (
-                <Tag tone="ok">executed {relativeTime(a.consumed_at, now)}</Tag>
+                <Tag tone="ok">grant consumed {relativeTime(a.consumed_at, now)}</Tag>
               ) : a.grant_expires_at && Date.parse(a.grant_expires_at) > now ? (
                 <Tag tone="warn">grant valid {countdown(Date.parse(a.grant_expires_at) - now)}</Tag>
               ) : (
@@ -213,6 +223,25 @@ function ApprovalCard({ a, skewMs, onAct, canApprove }: { a: ApprovalItem; skewM
         </footer>
       )}
     </article>
+  );
+}
+
+function NotificationStrip() {
+  const { can } = useSession();
+  const { data } = useApi<NotificationSettings>("/api/console/notifications");
+  if (!data) return null;
+  const on = data.slack.configured;
+  return (
+    <p className="notify-strip" role="status">
+      <span className={cx("sdot", on ? "sdot-ok" : "sdot-muted")} aria-hidden="true" />
+      <span className="notify-strip-label">Approval notifications</span>
+      <span>{on ? "Slack · Enabled" : "Not configured"}</span>
+      {can("manage_org") && (
+        <Link to="/app/settings?tab=notifications" className="link-sm">
+          {on ? "Manage" : "Connect Slack"}
+        </Link>
+      )}
+    </p>
   );
 }
 
@@ -245,7 +274,7 @@ export function ApprovalsPage() {
     setActError(null);
     try {
       await api(`/api/console/approvals/${acting.a.approval_id}/${acting.verb}`, { body: note.trim() ? { note: note.trim() } : {} });
-      toast(acting.verb === "approve" ? "Approved — the agent may now execute once" : "Denied — the agent cannot execute");
+      toast(acting.verb === "approve" ? "Approved — the integration may now redeem the grant once" : "Denied — the grant cannot be consumed");
       setActing(null);
       setNote("");
       void reload();
@@ -279,8 +308,9 @@ export function ApprovalsPage() {
             <span>The integration polls <code className="mono-inline">GET /v1/approvals/{"{id}"}</code>. If approved, it redeems the grant once with <code className="mono-inline">POST /v1/approvals/{"{id}"}/consume</code> before the grant expires.</span>
           </li>
         </ol>
-        <p className="muted small">Mother AI does not send Slack or email notifications for approvals. This queue refreshes every 15 seconds while it is open.</p>
+        <p className="muted small">If Slack notifications are connected in Settings, Mother posts when a request needs review and again when it is approved, denied, expires or its grant is consumed. Mother does not send email. This queue refreshes every 15 seconds while it is open.</p>
       </details>
+      <NotificationStrip />
       <Tabs
         label="Approval status"
         value={tab}

@@ -3,7 +3,8 @@
 # UI is served by Vercel. Production must always correspond to a committed, pushed `main`;
 # deploy with `npm run deploy` (scripts/deploy.mjs).
 #
-# Secrets (npx wrangler secret put <NAME> --name mother-ai): FORM_SIGNING_KEY, SLACK_LEADS_WEBHOOK_URL.
+# Secrets (npx wrangler secret put <NAME> --name mother-ai): FORM_SIGNING_KEY, SLACK_LEADS_WEBHOOK_URL,
+# NOTIFICATION_ENCRYPTION_KEY.
 
 name = "mother-ai"
 main = "src/worker.ts"
@@ -68,7 +69,8 @@ namespace_id = "4107"
 simple = { limit = 300, period = 60 }
 
 [triggers]
-# Sweeps expired approvals, sessions and auth challenges.
+# Sweeps expired approvals, sessions and auth challenges; retries approval notifications
+# and sends resolution events.
 crons = ["*/10 * * * *"]
 
 [vars]

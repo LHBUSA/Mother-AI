@@ -3,6 +3,7 @@ import { parseJson, type ApprovalRow, type DecisionRow } from "../../lib/db";
 import { actOnApproval, approvalView, sweepExpiredApprovals } from "../../gateway/approvals";
 import { Validator, assertOrgWritable, type ConsoleContext } from "./context";
 import { decisionSummary } from "./audit";
+import { notifyApprovalEvent } from "../../notifications/approvals";
 
 type Joined = ApprovalRow & {
   d_id: string;
@@ -11,6 +12,8 @@ type Joined = ApprovalRow & {
   policy_effect: string | null;
   agent_display_name: string | null;
   agent_environment: string | null;
+  notification_status: string | null;
+  notification_error: string | null;
 };
 
 export async function listApprovals(ctx: ConsoleContext): Promise<Response> {
@@ -25,11 +28,13 @@ export async function listApprovals(ctx: ConsoleContext): Promise<Response> {
                           'data_class', d.data_class, 'environment', d.environment, 'mcp_server', d.mcp_server, 'mcp_tool', d.mcp_tool,
                           'decision', d.decision, 'reason_code', d.reason_code, 'reason', d.reason, 'policy_id', d.policy_id,
                           'policy_version', d.policy_version, 'created_at', d.created_at, 'context', d.context) AS d_json,
-              p.name AS policy_name, p.effect AS policy_effect, a.display_name AS agent_display_name, a.environment AS agent_environment
+              p.name AS policy_name, p.effect AS policy_effect, a.display_name AS agent_display_name, a.environment AS agent_environment,
+              n.status AS notification_status, n.last_error AS notification_error
          FROM approvals ap
          JOIN decisions d ON d.id = ap.decision_id AND d.organization_id = ap.organization_id
          LEFT JOIN policies p ON p.id = d.policy_id AND p.organization_id = d.organization_id
          LEFT JOIN agents a ON a.id = d.agent_id AND a.organization_id = d.organization_id
+         LEFT JOIN approval_notifications n ON n.approval_id = ap.id AND n.organization_id = ap.organization_id AND n.event = 'review_required' AND n.channel = 'slack'
         WHERE ap.organization_id = ? ${filter}
         ORDER BY CASE ap.status WHEN 'pending' THEN 0 ELSE 1 END, ap.requested_at DESC
         LIMIT 100`,
@@ -51,6 +56,7 @@ export async function listApprovals(ctx: ConsoleContext): Promise<Response> {
         decision: { ...decisionSummary(d), context: d.context ? parseJson(d.context, {}) : null },
         policy: d.policy_id ? { id: d.policy_id, name: r.policy_name, effect: r.policy_effect, version: d.policy_version } : null,
         agent: { display_name: r.agent_display_name, environment: r.agent_environment },
+        notification: r.notification_status ? { channel: "slack", status: r.notification_status, error: r.notification_error } : null,
       };
     }),
     counts: Object.fromEntries(counts.results.map((c) => [c.status, c.n])),
@@ -71,5 +77,6 @@ export async function actApproval(ctx: ConsoleContext): Promise<Response> {
     { action: verb, note: note || null, actor: ctx.actor, grantTtlSeconds: ctx.session.organization.approval_grant_ttl_seconds },
     ctx.nowMs,
   );
+  ctx.waitUntil(notifyApprovalEvent(ctx.env, ctx.orgId, id, verb === "approve" ? "approved" : "denied"));
   return json({ approval: { ...approvalView(row, ctx.nowMs), acted_at: row.acted_at, acted_by_name: row.acted_by_name, note: row.note } });
 }

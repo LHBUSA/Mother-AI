@@ -4596,3 +4596,69 @@ input[type="date"].input {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------ approval notifications */
+.notify-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.notify-status .sdot {
+  margin-top: 6px;
+  flex: none;
+}
+.notify-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.notify-strip-label {
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.table-notify td .mono,
+.table-notify td code {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 860px) {
+  .table-notify thead {
+    display: none;
+  }
+  .table-notify,
+  .table-notify tbody,
+  .table-notify tr,
+  .table-notify td {
+    display: block;
+    width: 100%;
+  }
+  .table-notify tr {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .table-notify tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .table-notify td {
+    border: 0 !important;
+    padding: 4px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: right;
+    min-width: 0;
+  }
+  .table-notify td[data-label]::before {
+    content: attr(data-label);
+    font: 500 10.5px/1 var(--font-mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    flex: none;
+  }
+}

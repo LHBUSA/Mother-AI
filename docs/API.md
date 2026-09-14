@@ -240,6 +240,16 @@ POST /v1/approvals/{approval_id}/consume → exactly once, immediately before ex
 - `consume` succeeds once. Afterwards: `409 APPROVAL_ALREADY_CONSUMED`. Other refusals: `APPROVAL_PENDING`, `APPROVAL_DENIED`, `APPROVAL_EXPIRED`, `APPROVAL_GRANT_EXPIRED`.
 - The original `review` decision record never changes. Approval actions (approve, deny, expire, consume) are appended as control events with the acting user or API key.
 
+### Approval notifications (Slack)
+
+An organization admin can connect one Slack incoming webhook in **Settings → Notifications**. Nothing about the flow above changes: notifications are a background side effect of an approval that has already been written, and the evaluate response never waits for them.
+
+- When `/v1/evaluate` creates a pending approval, Mother queues exactly one `review_required` message: organization, agent, environment, capability · operation (MCP server/tool), resource, policy, reason code, decision id, approval id, created and expiry times, and a link to the Approvals queue. Request `context` is never sent.
+- After that message is accepted by Slack, Mother also posts `approved`, `denied`, `expired` (after the cron persists expiry) and `consumed` as separate events. `approved` means the integration *may* redeem the grant; only `consumed` means it did. Mother does not observe the downstream action.
+- ALLOW and BLOCK decisions never notify. Replays, polling and console reads never re-notify: each (approval, event, channel) has one durable record.
+- Delivery status is literal: `QUEUED`, `SENDING`, `SENT_TO_PROVIDER` (Slack answered 200; not proof a person read it), `FAILED`, `SKIPPED` (for example the approval was no longer pending, the organization is not active, or Slack was disconnected). 429, 5xx, timeouts and network errors are retried — one short in-request retry, then the 10-minute cron — for at most 3 attempts. Other 4xx responses fail immediately.
+- A notification failure never changes a decision, an approval, its expiry or its grant.
+
 ## MCP normalization
 
 MCP tool calls normalize into the same canonical action as direct API calls:

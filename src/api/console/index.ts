@@ -13,6 +13,7 @@ import { actApproval, listApprovals } from "./approvals";
 import { getDecision, listControlEvents, listDecisions } from "./audit";
 import { createKey, listKeys, revokeKey } from "./keys";
 import { badgeAction, getBadge } from "./badge";
+import { configureSlack, getNotificationSettings, removeSlack, testSlack } from "./notifications";
 import { createInvite, getSecurity, getSettings, listMembers, revokeInvite, revokeOtherSessions, updateMember, updateSettings } from "./organization";
 
 type Handler = (ctx: ConsoleContext) => Promise<Response>;
@@ -48,6 +49,11 @@ const ROUTES: Route[] = [
 
   ["GET", /^\/api\/console\/badge$/, "read", getBadge],
   ["POST", /^\/api\/console\/badge\/(enable|suspend|resume|rotate)$/, "manage_badge", badgeAction],
+
+  ["GET", /^\/api\/console\/notifications$/, "read", getNotificationSettings],
+  ["POST", /^\/api\/console\/notifications\/slack$/, "manage_org", configureSlack],
+  ["POST", /^\/api\/console\/notifications\/slack\/remove$/, "manage_org", removeSlack],
+  ["POST", /^\/api\/console\/notifications\/slack\/test$/, "manage_org", testSlack],
 
   ["GET", /^\/api\/console\/settings$/, "read", getSettings],
   ["PATCH", /^\/api\/console\/settings$/, "manage_org", updateSettings],

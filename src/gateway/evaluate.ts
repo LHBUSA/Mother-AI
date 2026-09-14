@@ -21,6 +21,7 @@ import {
   type PolicyRecord,
 } from "./policy-engine";
 import { approvalView, type ApprovalView } from "./approvals";
+import { notifyApprovalEvent } from "../notifications/approvals";
 
 export interface GatewayDeps {
   now: () => number;
@@ -256,6 +257,10 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
     }
     throw new ApiError(503, "AUDIT_WRITE_FAILED", "Mother AI could not record decision evidence; failing closed.");
   }
+
+  // Side effect only, after the decision and approval are durable. It runs in the
+  // background, never throws, and cannot change the response below.
+  if (approval) deps.waitUntil(notifyApprovalEvent(env, principal.org_id, approval.approval_id, "review_required", deps.now));
 
   return json(
     {

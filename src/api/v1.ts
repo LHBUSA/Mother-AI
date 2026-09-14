@@ -9,6 +9,7 @@ import type { DecisionRow } from "../lib/db";
 import { assertKeyUsable, readBearerKey } from "../gateway/identity";
 import { gatewayError, handleEvaluate, type GatewayDeps } from "../gateway/evaluate";
 import { approvalView, consumeApproval, getApproval } from "../gateway/approvals";
+import { notifyApprovalEvent } from "../notifications/approvals";
 
 interface GatewayPrincipal {
   key_id: string;
@@ -54,6 +55,7 @@ export async function routeV1(request: Request, env: Env, deps: GatewayDeps): Pr
         ? await consumeApproval(env.DB, principal.org_id, approvalId, { type: "api_key", id: principal.key_id, label: principal.key_prefix }, nowMs)
         : await getApproval(env.DB, principal.org_id, approvalId);
       if (!row) throw new ApiError(404, "APPROVAL_NOT_FOUND", "Approval not found.");
+      if (consume) deps.waitUntil(notifyApprovalEvent(env, principal.org_id, approvalId, "consumed", deps.now));
       const decision = await env.DB.prepare(
         `SELECT id, request_id, agent_key, capability, operation, resource FROM decisions WHERE id = ? AND organization_id = ?`,
       )

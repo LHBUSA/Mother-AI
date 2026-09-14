@@ -4,10 +4,11 @@ import { useApi, useDocumentTitle, useNow } from "../lib/hooks";
 import { useQuery, useRouter } from "../lib/router";
 import { dateTime, duration, relativeTime, ROLE_LABEL } from "../lib/format";
 import { useSession } from "../lib/session";
+import { describeNotificationError, EVENT_LABEL, STATUS_LABEL, STATUS_TONE, type NotificationSettings } from "../lib/notifications";
 import { IconKey, IconPlus } from "../components/icons";
 import { Alert, Button, Card, ConfirmDialog, CopyButton, Dialog, Empty, ErrorState, Field, Input, Mono, PageHeader, PermissionNotice, Select, Skeleton, Tabs, Tag, Toggle, cx, toast } from "../components/ui";
 
-type TabId = "organization" | "keys" | "members" | "security";
+type TabId = "organization" | "notifications" | "keys" | "members" | "security";
 
 // ---------------------------------------------------------------------------
 // Organization
@@ -654,22 +655,191 @@ function SecurityTab() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Approval notifications
+// ---------------------------------------------------------------------------
+
+function NotificationsTab() {
+  const { can } = useSession();
+  const now = useNow(30_000);
+  const { data, error, loading, reload, setData } = useApi<NotificationSettings>("/api/console/notifications");
+  const [url, setUrl] = useState("");
+  const [fieldError, setFieldError] = useState<string | undefined>();
+  const [busy, setBusy] = useState<"save" | "test" | "remove" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const editable = can("manage_org");
+
+  if (error && !data) return <ErrorState error={error} onRetry={() => void reload()} />;
+  if (loading && !data) return <div className="card card-body"><Skeleton lines={6} /></div>;
+  if (!data) return null;
+  const slack = data.slack;
+
+  const save = async () => {
+    setBusy("save");
+    setErr(null);
+    setFieldError(undefined);
+    try {
+      const res = await api<{ slack: NotificationSettings["slack"] }>("/api/console/notifications/slack", { body: { webhook_url: url.trim() } });
+      setUrl("");
+      setData({ ...data, slack: res.slack });
+      toast(slack.configured ? "Slack webhook replaced" : "Slack approval notifications enabled");
+    } catch (e) {
+      if (e instanceof ApiFailure && e.fields.webhook_url) setFieldError(e.fields.webhook_url);
+      else setErr(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const test = async () => {
+    setBusy("test");
+    setErr(null);
+    try {
+      const res = await api<{ test: { status: "SENT_TO_PROVIDER" | "FAILED"; http_status: number | null; error: string | null } }>("/api/console/notifications/slack/test", { body: {} });
+      if (res.test.status === "SENT_TO_PROVIDER") toast("Test message sent to Slack — check the channel");
+      else toast(`Test failed: ${describeNotificationError(res.test.error) ?? "unknown error"}`, "bad");
+    } catch (e) {
+      toast(errorMessage(e), "bad");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setBusy("remove");
+    setErr(null);
+    try {
+      const res = await api<{ slack: NotificationSettings["slack"] }>("/api/console/notifications/slack/remove", { body: {} });
+      setData({ ...data, slack: res.slack });
+      setRemoving(false);
+      toast("Slack approval notifications removed");
+    } catch (e) {
+      setErr(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="settings-grid">
+      <Card title="Approval notifications">
+        <div className="notify-status">
+          <span className={cx("sdot", slack.configured ? "sdot-ok" : "sdot-muted")} aria-hidden="true" />
+          <div>
+            <div className="setting-title">{slack.configured ? "Slack · Enabled" : "Not configured"}</div>
+            <p className="muted small">
+              {slack.configured
+                ? `Connected ${relativeTime(slack.configured_at, now)}${slack.configured_by_name ? ` by ${slack.configured_by_name}` : ""}${slack.updated_at !== slack.configured_at ? ` · webhook replaced ${relativeTime(slack.updated_at, now)}` : ""}.`
+                : "Approvers only find pending requests by opening the Approvals queue."}
+            </p>
+          </div>
+        </div>
+        <p className="muted small mt-12">
+          When a policy returns <Mono>review</Mono>, Mother posts one message with the agent, action, resource, policy, reason code, approval and decision ids, and the expiry — never the request context. Once that message is sent, Mother also posts when the request is approved, denied, expires, or its one-time grant is consumed. Approved does not mean executed.
+        </p>
+        <p className="muted small">Delivery problems never change a decision or an approval. Failed sends are retried at most {3} times in total.</p>
+        {!data.available && <Alert tone="warn">Approval notifications are not available on this deployment yet.</Alert>}
+      </Card>
+
+      <Card title={slack.configured ? "Slack destination" : "Connect Slack"}>
+        {editable ? (
+          <>
+            <Field
+              label={slack.configured ? "Replace the incoming webhook URL" : "Slack incoming webhook URL"}
+              htmlFor="n-webhook"
+              error={fieldError}
+              hint="Create an incoming webhook for your approvals channel in Slack. Mother stores it encrypted and never shows it again — not even to admins."
+            >
+              <Input
+                id="n-webhook"
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="https://hooks.slack.com/services/…"
+                value={url}
+                maxLength={200}
+                disabled={!data.available}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+            </Field>
+            {err && <Alert tone="bad">{err}</Alert>}
+            <div className="form-actions">
+              {slack.configured && (
+                <>
+                  <Button variant="ghost" disabled={!!busy} onClick={() => { setErr(null); setRemoving(true); }}>Remove</Button>
+                  <Button variant="secondary" loading={busy === "test"} disabled={!!busy && busy !== "test"} onClick={() => void test()}>Send test message</Button>
+                </>
+              )}
+              <Button variant="primary" loading={busy === "save"} disabled={!url.trim() || !data.available || (!!busy && busy !== "save")} onClick={() => void save()}>
+                {slack.configured ? "Replace webhook" : "Enable Slack notifications"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <PermissionNotice what="Connecting or changing approval notifications" requires="Admin" />
+        )}
+      </Card>
+
+      <Card title="Recent notifications" pad={false}>
+        {data.recent.length === 0 ? (
+          <Empty title="No approval notifications yet">
+            {slack.configured ? "The next review decision will appear here with its delivery status." : "Connect Slack to alert approvers when a request needs review."}
+          </Empty>
+        ) : (
+          <div className="table-wrap">
+            <table className="table table-notify">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Approval</th>
+                  <th>Status</th>
+                  <th>Attempts</th>
+                  <th>Queued</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recent.map((n) => (
+                  <tr key={n.id}>
+                    <td data-label="Event" className="cell-title">{EVENT_LABEL[n.event]}</td>
+                    <td data-label="Approval"><Mono>{n.approval_id}</Mono></td>
+                    <td data-label="Status"><Tag tone={STATUS_TONE[n.status]}>{STATUS_LABEL[n.status]}</Tag></td>
+                    <td data-label="Attempts" className="muted">{n.attempts} / {n.max_attempts}</td>
+                    <td data-label="Queued" className="muted" title={dateTime(n.queued_at)}>{relativeTime(n.queued_at, now)}</td>
+                    <td data-label="Detail" className="muted small">{describeNotificationError(n.last_error) ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <ConfirmDialog open={removing} onClose={() => setRemoving(false)} onConfirm={() => void remove()} title="Remove Slack notifications?" confirmLabel="Remove" busy={busy === "remove"} error={err}>
+        <p>The stored webhook is deleted. Approvers will no longer be alerted in Slack; pending requests stay in the Approvals queue and nothing about them changes.</p>
+      </ConfirmDialog>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   useDocumentTitle("Settings");
   const query = useQuery();
   const { navigate } = useRouter();
   const { can } = useSession();
   const raw = query.get("tab");
-  const tab: TabId = raw === "keys" || raw === "members" || raw === "security" ? raw : "organization";
+  const tab: TabId = raw === "notifications" || raw === "keys" || raw === "members" || raw === "security" ? raw : "organization";
   return (
     <>
-      <PageHeader title="Settings" description="Organization controls, gateway credentials, members and your own sign-in security." />
+      <PageHeader title="Settings" description="Organization controls, approval notifications, gateway credentials, members and your own sign-in security." />
       <Tabs
         label="Settings sections"
         value={tab}
         onChange={(t) => navigate(`/app/settings${t === "organization" ? "" : `?tab=${t}`}`, { replace: true })}
         tabs={[
           { id: "organization", label: "Organization" },
+          { id: "notifications", label: "Notifications" },
           ...(can("manage_keys") ? [{ id: "keys" as TabId, label: "API keys" }] : []),
           { id: "members", label: "Members" },
           { id: "security", label: "Security" },
@@ -677,6 +847,7 @@ export function SettingsPage() {
       />
       <div className="tab-panel">
         {tab === "organization" && <OrganizationTab />}
+        {tab === "notifications" && <NotificationsTab />}
         {tab === "keys" && <KeysTab />}
         {tab === "members" && <MembersTab />}
         {tab === "security" && <SecurityTab />}

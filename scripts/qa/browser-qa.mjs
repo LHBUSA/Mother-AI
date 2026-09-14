@@ -240,12 +240,28 @@ const routes = [
   ["/app/integrations", "console-integrations"],
   ["/app/badge", "console-badge"],
   ["/app/settings", "console-settings-org"],
+  ["/app/settings?tab=notifications", "console-settings-notifications"],
   ["/app/settings?tab=keys", "console-settings-keys"],
   ["/app/settings?tab=members", "console-settings-members"],
   ["/app/settings?tab=security", "console-settings-security"],
 ];
 for (const width of [1440, 390]) {
   for (const [path, name] of routes) await visit(path, name, width);
+}
+
+// Approval notifications: truthful status, and a stored webhook is never rendered.
+const WEBHOOK_IN_DOM = /hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[A-Za-z0-9]+/;
+await visit("/app/settings?tab=notifications", "console-settings-notifications", 1440);
+{
+  const settings = await page.evaluate(async (api) => (await (await fetch(`${api}/api/console/notifications`, { credentials: "include" })).json()), API);
+  const text = await page.evaluate(() => document.body.textContent ?? "");
+  const html = await page.evaluate(() => document.documentElement.outerHTML);
+  const expected = settings.slack?.configured ? "Slack · Enabled" : "Not configured";
+  check("notifications settings show the API's configured state", text.includes("Approval notifications") && text.includes(expected), expected);
+  check("notifications API and page never expose a webhook URL", !WEBHOOK_IN_DOM.test(html) && !WEBHOOK_IN_DOM.test(JSON.stringify(settings)));
+  await visit("/app/approvals", "console-approvals-notify", 1440);
+  const strip = await page.evaluate(() => document.querySelector(".notify-strip")?.textContent ?? "");
+  check("approvals page shows the notification status line", strip.includes("Approval notifications") && strip.includes(expected), strip);
 }
 
 // Mobile navigation drawer

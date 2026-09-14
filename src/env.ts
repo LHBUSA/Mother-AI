@@ -20,4 +20,6 @@ export interface Env {
   FORM_SIGNING_KEY?: string;
   /** Secret: Slack Incoming Webhook for #leads. Never logged or returned. */
   SLACK_LEADS_WEBHOOK_URL?: string;
+  /** Secret: 32-byte base64url AES-GCM key for per-organization notification destinations. Never logged. */
+  NOTIFICATION_ENCRYPTION_KEY?: string;
 }

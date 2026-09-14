@@ -64,7 +64,7 @@ It does not detect intent, "rogue AI", consciousness or sentience, and it does n
 
 ## Secrets
 
-- No secrets in Git or in the browser bundle. Worker secrets: `FORM_SIGNING_KEY` (Founding Access form timing tokens and the IP-hash salt) and `SLACK_LEADS_WEBHOOK_URL` (Slack Incoming Webhook for `#leads`; never logged). The Vercel UI needs no secrets.
+- No secrets in Git or in the browser bundle. Worker secrets: `FORM_SIGNING_KEY` (Founding Access form timing tokens and the IP-hash salt) `SLACK_LEADS_WEBHOOK_URL` (Slack Incoming Webhook for `#leads`; never logged) and `NOTIFICATION_ENCRYPTION_KEY` (AES-GCM key for per-organization approval-notification webhooks). Customer webhooks are stored only as ciphertext bound to their organization and channel id, restricted to `hooks.slack.com/services/…`, write-only through the console API, and never logged. The Vercel UI needs no secrets.
 - API keys are never logged. Stored `context`/`resource` are redacted (see `src/lib/redact.ts`). Error responses never include stack traces or internal messages.
 - Raw client IPs are not stored for Founding Access; a daily-salted hash is.
 

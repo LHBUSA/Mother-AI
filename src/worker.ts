@@ -21,6 +21,7 @@ import { routeConsole } from "./api/console/index";
 import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken, health, ready } from "./api/public";
 import { handleBadgeSvg, handlePublicBadge } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
+import { sweepApprovalNotifications } from "./notifications/approvals";
 import { robotsTxt } from "./lib/seo";
 import { canonicalRedirect } from "./lib/site";
 import { applyCors, preflight } from "./lib/cors";
@@ -96,6 +97,13 @@ export default {
           env.DB.prepare(`DELETE FROM sessions WHERE expires_at < ?`).bind(iso(nowMs - 7 * 24 * 60 * 60 * 1000)),
         ]);
         console.log("maintenance sweep complete", now);
+        // After expiry is persisted, so expired approvals get their resolution notification.
+        try {
+          const result = await sweepApprovalNotifications(env);
+          console.log("approval notification sweep complete", result);
+        } catch (err) {
+          console.error("approval notification sweep failed", err instanceof Error ? err.name : "unknown");
+        }
       })(),
     );
   },
