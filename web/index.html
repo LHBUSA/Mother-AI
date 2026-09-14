@@ -71,6 +71,9 @@
           <path d="M32 38v6.5M24 43.5h16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" />
         </symbol>
         <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+        <symbol id="i-allow" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M5.3 8.2 7.2 10.1 10.8 6.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+        <symbol id="i-review" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M6.5 5.6v4.8M9.5 5.6v4.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></symbol>
+        <symbol id="i-block" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M4 12 12 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></symbol>
         <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
       </defs>
     </svg>
@@ -85,13 +88,14 @@
         </a>
         <nav class="nav__links" aria-label="Primary">
           <a href="#how-it-works">How it works</a>
-          <a href="#demo">Demo</a>
-          <a href="#policies">Policies</a>
+          <a href="#decisions">Decisions</a>
+          <a href="#approval">Approval</a>
+          <a href="#audit">Audit</a>
           <a href="#mcp">MCP</a>
-          <a href="#badge">Badge</a>
+          <a href="#demo">Demo</a>
         </nav>
         <div class="nav__actions">
-          <a class="btn btn--ghost btn--sm" href="/app/">Sign in</a>
+          <a class="btn btn--ghost btn--sm" href="/app/">Open Console</a>
           <a class="btn btn--primary btn--sm" href="#founding-access">Founding Access</a>
         </div>
         <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" data-nav-toggle>
@@ -102,17 +106,18 @@
       <div class="drawer" id="mobile-nav" hidden data-drawer>
         <nav class="drawer__links" aria-label="Mobile">
           <a href="#how-it-works">How it works</a>
-          <a href="#demo">Live demo</a>
-          <a href="#identity">Agent identity</a>
-          <a href="#policies">Policy enforcement</a>
-          <a href="#mcp">MCP</a>
+          <a href="#decisions">Allow · Review · Block</a>
+          <a href="#identity">Identity &amp; permissions</a>
+          <a href="#policies">Policies</a>
           <a href="#approval">Human approval</a>
           <a href="#audit">Audit trail</a>
+          <a href="#mcp">MCP</a>
+          <a href="#demo">Live demo</a>
           <a href="#badge">Protected badge</a>
         </nav>
         <div class="drawer__actions">
-          <a class="btn btn--primary" href="#founding-access">Start protecting agents</a>
-          <a class="btn btn--ghost" href="/app/">Sign in</a>
+          <a class="btn btn--primary" href="/app/">Open Console</a>
+          <a class="btn btn--ghost" href="#founding-access">Founding Access</a>
         </div>
       </div>
     </header>
@@ -123,23 +128,19 @@
         <div class="hero__backdrop" aria-hidden="true"></div>
         <div class="container hero__grid">
           <div class="hero__copy">
-            <p class="eyebrow"><span class="eyebrow__dot"></span>Control Plane for AI Agents</p>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Mother AI</p>
             <h1 id="hero-title" class="hero__title">Your AI has permissions. <span class="hl">Mother enforces them.</span></h1>
-            <p class="hero__sub">Identity. Permissions. Human Approval. Audit Trails.</p>
             <p class="hero__lede">
-              Mother AI sits between your agents and the actions they take. Every protected call — a refund, a CRM update,
-              a database write, an MCP tool — is checked against your policies before it runs, and answered with
-              <b class="t-allow">allow</b>, <b class="t-review">review</b> or <b class="t-block">block</b>.
+              A policy and approval layer for AI agents, MCP tools and automated actions. Every request is identified, evaluated and
+              recorded before sensitive work proceeds.
             </p>
             <div class="hero__cta">
-              <a class="btn btn--primary btn--lg" href="#founding-access">Start protecting agents <svg class="ico" aria-hidden="true"><use href="#i-arrow" /></svg></a>
-              <a class="btn btn--ghost btn--lg" href="#how-it-works">See how it works</a>
+              <a class="btn btn--primary btn--lg" href="/app/">Open Console <svg class="ico" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+              <a class="btn btn--ghost btn--lg" href="#how-it-works">See How It Works</a>
             </div>
-            <ul class="hero__facts" aria-label="Core properties">
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Deterministic decisions</li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Fail-closed by default</li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>MCP-aware</li>
-            </ul>
+            <p class="hero__trust" aria-label="Identity, policy, approval and audit">
+              <span>Identity</span><span>Policy</span><span>Approval</span><span>Audit</span>
+            </p>
           </div>
 
           <figure class="gw" aria-label="Diagram: agents send requests through Mother AI, which allows, holds for review, or blocks each action before it reaches your tools." data-gateway>
@@ -195,11 +196,21 @@
         </div>
       </section>
 
+      <div class="statement" role="note">
+        <div class="container statement__inner">
+          <svg class="statement__mark" aria-hidden="true"><use href="#mark" /></svg>
+          <p>Mother AI watches what your AIs are allowed to do.</p>
+          <span class="statement__decisions" aria-hidden="true">
+            <span class="pill pill--allow">ALLOW</span><span class="pill pill--review">REVIEW</span><span class="pill pill--block">BLOCK</span>
+          </span>
+        </div>
+      </div>
+
       <!-- ================================================================ PROBLEM -->
       <section class="section" id="problem" aria-labelledby="problem-title">
         <div class="container">
           <header class="section__head">
-            <p class="eyebrow"><span class="eyebrow__dot"></span>The actual problem</p>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Your AIs need supervision too</p>
             <h2 id="problem-title">The risk isn't science fiction. It's software holding production credentials.</h2>
             <p class="lede">
               Agents are being wired into the same systems your employees use — often with a single broad API key and no checkpoint
@@ -287,57 +298,155 @@
         <div class="container">
           <header class="section__head">
             <p class="eyebrow"><span class="eyebrow__dot"></span>How it works</p>
-            <h2 id="how-title">One checkpoint between the decision and the action.</h2>
+            <h2 id="how-title">Mother sits between the request and the action.</h2>
             <p class="lede">
-              Your agent — or the tool layer it calls through — asks Mother before executing a protected action. Mother answers in a single
-              deterministic evaluation and records the evidence. Anything other than an explicit <b class="t-allow">allow</b> means do not execute.
+              Your agent, chatbot or MCP client asks Mother before it executes anything protected. The gateway identifies the caller, the
+              policy engine decides, and only an explicit <b class="t-allow">ALLOW</b> reaches your tools.
             </p>
           </header>
 
-          <ol class="steps">
-            <li class="step">
-              <span class="step__n mono">01</span>
-              <h3>Identify the agent</h3>
-              <p>The request is authenticated with an organization key and matched to a registered agent identity and environment.</p>
-              <code class="step__code">agent_id: "billing-agent-prod"</code>
-            </li>
-            <li class="step">
-              <span class="step__n mono">02</span>
-              <h3>Evaluate the requested action</h3>
-              <p>Capability, operation, resource, destination, data class and context are normalized into one canonical request.</p>
-              <code class="step__code">payments.refund · amount 4200</code>
-            </li>
-            <li class="step">
-              <span class="step__n mono">03</span>
-              <h3>Apply policy</h3>
-              <p>Every enabled policy in scope is evaluated. Precedence is fixed and documented — never dependent on rule order.</p>
-              <code class="step__code">block &gt; review &gt; allow &gt; default</code>
-            </li>
-            <li class="step">
-              <span class="step__n mono">04</span>
-              <h3>Allow, review or block</h3>
-              <p>Mother returns a machine-readable decision and reason code. Review holds the action for a human approver.</p>
-              <code class="step__code"><span class="t-allow">allow</span> · <span class="t-review">review</span> · <span class="t-block">block</span></code>
-            </li>
-            <li class="step">
-              <span class="step__n mono">05</span>
-              <h3>Record evidence</h3>
-              <p>The decision, policy, reason and redacted context are written to an append-oriented audit trail before the response.</p>
-              <code class="step__code">decision_id: "dec_…"</code>
-            </li>
-          </ol>
+          <div class="arch">
+            <ol class="pipe" aria-label="Request path through Mother AI">
+              <li class="pipe__stage">
+                <span class="pipe__n mono" aria-hidden="true">01</span>
+                <div class="pipe__main">
+                  <h3>Agent · Chatbot · MCP client</h3>
+                  <p>Describes the action it intends to take — then waits for Mother's answer.</p>
+                </div>
+                <code class="pipe__code">POST /v1/evaluate<br />POST /v1/mcp/evaluate</code>
+              </li>
+              <li class="pipe__stage pipe__stage--mother">
+                <span class="pipe__n mono" aria-hidden="true">02</span>
+                <div class="pipe__main">
+                  <h3><svg class="pipe__mark" aria-hidden="true"><use href="#mark" /></svg>Mother AI Gateway</h3>
+                  <p>Authenticates your organization's API key, resolves the registered agent and its environment, and normalizes the request.</p>
+                </div>
+                <code class="pipe__code">agent_id · capability<br />operation · resource</code>
+              </li>
+              <li class="pipe__stage pipe__stage--mother">
+                <span class="pipe__n mono" aria-hidden="true">03</span>
+                <div class="pipe__main">
+                  <h3>Policy engine</h3>
+                  <p>Evaluates every enabled policy in scope with fixed precedence. Deterministic — no model decides.</p>
+                </div>
+                <code class="pipe__code">block &gt; review &gt; allow<br />&gt; default</code>
+              </li>
+              <li class="pipe__stage pipe__stage--decision">
+                <span class="pipe__n mono" aria-hidden="true">04</span>
+                <div class="pipe__main">
+                  <h3>Decision</h3>
+                  <p class="pipe__outcomes">
+                    <span class="pill pill--allow">ALLOW</span><span class="pill pill--review">REVIEW</span><span class="pill pill--block">BLOCK</span>
+                  </p>
+                  <p>Returned with a reason code and written to the audit trail before the response leaves Mother.</p>
+                </div>
+                <code class="pipe__code">decision_id<br />reason_code</code>
+              </li>
+              <li class="pipe__stage pipe__stage--tool">
+                <span class="pipe__n mono" aria-hidden="true">05</span>
+                <div class="pipe__main">
+                  <h3>Approved tool / API</h3>
+                  <p>Runs only on <b class="t-allow">ALLOW</b>, or after a <b class="t-review">REVIEW</b> is approved and its one-time grant is consumed. Anything else: it never runs.</p>
+                </div>
+                <code class="pipe__code">payments · CRM · database<br />internal API · MCP tool</code>
+              </li>
+            </ol>
+
+            <aside class="rflow" aria-labelledby="rflow-title">
+              <p class="rflow__tag"><span class="pill pill--review">REVIEW</span><span class="mono">path</span></p>
+              <h3 id="rflow-title">When a decision needs a human</h3>
+              <ol class="rflow__steps">
+                <li>
+                  <b>AI requests the action</b>
+                  <span>An agent asks to refund a payment above your approval threshold.</span>
+                </li>
+                <li>
+                  <b>Mother pauses it</b>
+                  <span>The decision is <b class="t-review">REVIEW</b>. An approval request is created with a short expiry.</span>
+                </li>
+                <li>
+                  <b>A human approves or rejects</b>
+                  <span>In the Mother console approval queue, by a member with approver rights.</span>
+                </li>
+                <li>
+                  <b>The decision is recorded</b>
+                  <span>Approval events are appended. The original decision is never edited.</span>
+                </li>
+                <li class="rflow__end">
+                  <b>Execution continues or stops</b>
+                  <span><b class="t-allow">Approved</b> — the integration consumes the one-time grant, then executes.</span>
+                  <span><b class="t-block">Rejected or expired</b> — the action never runs.</span>
+                </li>
+              </ol>
+            </aside>
+          </div>
 
           <div class="failclosed">
             <div class="failclosed__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></svg></div>
             <div>
               <h3>Fail closed, by design</h3>
-              <p>Invalid key, disabled organization, unknown agent, malformed policy or an evaluation error all resolve to <b class="t-block">block</b> with a reason code. Mother never allows an action because something went wrong.</p>
+              <p>Invalid key, disabled organization, unknown agent, malformed policy or an evaluation error all resolve to <b class="t-block">BLOCK</b> with a reason code. Mother never allows an action because something went wrong.</p>
             </div>
           </div>
         </div>
       </section>
 
       <!-- ================================================================ DEMO -->
+      <!-- ================================================================ DECISIONS -->
+      <section class="section" id="decisions" aria-labelledby="decisions-title">
+        <div class="container">
+          <header class="section__head">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>The decision contract</p>
+            <h2 id="decisions-title">Three answers. No ambiguity.</h2>
+            <p class="lede">
+              Every evaluation returns exactly one decision and a machine-readable reason code. Integrations treat anything other than
+              <b class="t-allow">ALLOW</b> as “do not execute”.
+            </p>
+          </header>
+
+          <div class="dcards">
+            <article class="dcard dcard--allow" aria-labelledby="dcard-allow">
+              <div class="dcard__head">
+                <svg class="dcard__glyph" aria-hidden="true"><use href="#i-allow" /></svg>
+                <h3 id="dcard-allow">ALLOW</h3>
+              </div>
+              <p class="dcard__def">Policy permits the action.</p>
+              <dl class="dcard__meta">
+                <div><dt>Your integration</dt><dd>Executes the action.</dd></div>
+                <div><dt>Reason codes</dt><dd class="mono">POLICY_ALLOW<br />DEFAULT_ALLOW<sup>*</sup></dd></div>
+              </dl>
+              <p class="dcard__foot"><sup>*</sup>Only for non-production agents set to default to allow.</p>
+            </article>
+
+            <article class="dcard dcard--review" aria-labelledby="dcard-review">
+              <div class="dcard__head">
+                <svg class="dcard__glyph" aria-hidden="true"><use href="#i-review" /></svg>
+                <h3 id="dcard-review">REVIEW</h3>
+              </div>
+              <p class="dcard__def">Human approval required before execution.</p>
+              <dl class="dcard__meta">
+                <div><dt>Your integration</dt><dd>Holds. Checks the approval, consumes it once, then executes — or stops.</dd></div>
+                <div><dt>Reason codes</dt><dd class="mono">HUMAN_APPROVAL_REQUIRED<br />DEFAULT_REVIEW</dd></div>
+              </dl>
+              <p class="dcard__foot">Approvals expire. Expired or rejected requests never execute.</p>
+            </article>
+
+            <article class="dcard dcard--block" aria-labelledby="dcard-block">
+              <div class="dcard__head">
+                <svg class="dcard__glyph" aria-hidden="true"><use href="#i-block" /></svg>
+                <h3 id="dcard-block">BLOCK</h3>
+              </div>
+              <p class="dcard__def">Policy denies the action.</p>
+              <dl class="dcard__meta">
+                <div><dt>Your integration</dt><dd>Does not execute.</dd></div>
+                <div><dt>Reason codes</dt><dd class="mono">POLICY_BLOCK · DEFAULT_DENY<br />AGENT_UNKNOWN · POLICY_INVALID</dd></div>
+              </dl>
+              <p class="dcard__foot">Errors fail closed: every failed gateway response also carries <span class="mono">"decision": "block"</span>.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <section class="section section--demo" id="demo" aria-labelledby="demo-title">
         <div class="container">
           <header class="section__head section__head--split">
@@ -469,18 +578,34 @@
       <section class="section" id="identity" aria-labelledby="identity-title">
         <div class="container split">
           <div class="split__copy">
-            <p class="eyebrow"><span class="eyebrow__dot"></span>Agent identity</p>
-            <h2 id="identity-title">Every agent gets a name, an environment and a leash.</h2>
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Identity &amp; permissions</p>
+            <h2 id="identity-title">Permissions for actions, not filters for prompts.</h2>
             <p class="lede">
-              Stop treating "the AI" as one anonymous API key. Register each agent with a stable identity so policies, approvals and evidence
-              all attach to the specific agent that acted.
+              Mother doesn't read prompts. It evaluates the concrete action an agent is about to take — who is asking, what it wants to do
+              and to what — against the policies your organization configured.
             </p>
-            <ul class="checks">
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Stable agent IDs.</b> <span>Human-readable keys like <code>collections-agent-prod</code> that survive model and prompt changes.</span></div></li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Environment binding.</b> <span>A staging agent can't present itself as production.</span></div></li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Registered-agent mode.</b> <span>Requests from agents you haven't registered fail closed.</span></div></li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Disable one agent instantly.</b> <span>Without rotating credentials for every other agent.</span></div></li>
-            </ul>
+            <dl class="evals" aria-label="What a policy can evaluate">
+              <div class="evals__group">
+                <dt>Who is asking</dt>
+                <dd><code>agent</code> registered agent ID <span class="evals__sep">·</span> <code>environment</code> production, staging or development — bound to the agent <span class="evals__sep">·</span> organization API key, where test keys can't act for production agents</dd>
+              </div>
+              <div class="evals__group">
+                <dt>What it wants to do</dt>
+                <dd><code>capability</code> <code>operation</code> <code>protocol</code> <span class="evals__plain">api or mcp</span> <code>mcp.server</code> <code>mcp.tool</code></dd>
+              </div>
+              <div class="evals__group">
+                <dt>To what</dt>
+                <dd><code>resource</code> <code>destination</code> <code>data_class</code></dd>
+              </div>
+              <div class="evals__group">
+                <dt>In what context</dt>
+                <dd><code>context.*</code> any value your integration sends — an amount, a ticket, the initiating user or service</dd>
+              </div>
+            </dl>
+            <p class="evals__note">
+              Unregistered or disabled agents fail closed. Mother has no separate end-user identity field: pass the initiating user or service in
+              <code>context</code> and write policies on <code>context.*</code>.
+            </p>
           </div>
 
           <div class="idcard" aria-label="Example agent identity">
@@ -560,7 +685,7 @@
               </div>
               <div class="builder__foot">
                 <span class="mono">fields</span>
-                <span class="chip-s">agent</span><span class="chip-s">environment</span><span class="chip-s">capability</span><span class="chip-s">operation</span><span class="chip-s">resource</span><span class="chip-s">destination</span><span class="chip-s">data_class</span><span class="chip-s">context.*</span>
+                <span class="chip-s">agent</span><span class="chip-s">environment</span><span class="chip-s">protocol</span><span class="chip-s">capability</span><span class="chip-s">operation</span><span class="chip-s">resource</span><span class="chip-s">destination</span><span class="chip-s">data_class</span><span class="chip-s">mcp.server</span><span class="chip-s">mcp.tool</span><span class="chip-s">context.*</span>
               </div>
             </div>
 
@@ -578,7 +703,7 @@
               <div class="ops">
                 <p class="field__label">Operators</p>
                 <div class="ops__list mono">
-                  <span>equals</span><span>not_equals</span><span>in</span><span>not_in</span><span>starts_with</span><span>greater_than</span><span>less_than</span>
+                  <span>equals</span><span>not_equals</span><span>in</span><span>not_in</span><span>starts_with</span><span>glob</span><span>greater_than</span><span>greater_than_or_equal</span><span>less_than</span><span>less_than_or_equal</span><span>exists</span><span>not_exists</span>
                 </div>
               </div>
             </div>
@@ -688,14 +813,17 @@
             <p class="eyebrow"><span class="eyebrow__dot"></span>Human approval</p>
             <h2 id="approval-title">When the stakes are high, a person says yes.</h2>
             <p class="lede">
-              A <b class="t-review">review</b> decision is real: the action is held until an authorized approver acts. Approvers see exactly who
-              is asking, what it wants to do, why Mother stopped it and which policy fired.
+              <b class="t-review">REVIEW</b> is a real hold, not a warning. The action waits until an authorized approver decides — and the
+              integration can only execute once, before the grant expires.
             </p>
-            <ul class="checks">
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Short-lived by default.</b> <span>Pending requests expire. Expired approvals can't be executed.</span></div></li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Role-based approvers.</b> <span>Only members with approval rights can approve or deny.</span></div></li>
-              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Evidence, not edits.</b> <span>Approving creates new audit events. The original decision is never rewritten.</span></div></li>
-            </ul>
+            <ol class="asteps">
+              <li><span class="asteps__n mono">1</span><div><b>AI requests a protected action</b><span>Your integration calls <code>/v1/evaluate</code> or <code>/v1/mcp/evaluate</code>.</span></div></li>
+              <li><span class="asteps__n mono">2</span><div><b>Mother evaluates policy</b><span>Every enabled policy in scope, with fixed precedence.</span></div></li>
+              <li><span class="asteps__n mono">3</span><div><b>Decision becomes REVIEW</b><span>An approval request is created and expires if nobody acts.</span></div></li>
+              <li><span class="asteps__n mono">4</span><div><b>An approver reviews it in the console</b><span>Who is asking, what it wants, why Mother stopped it and which policy fired.</span></div></li>
+              <li><span class="asteps__n mono">5</span><div><b>Approve or reject</b><span>With an optional note. Only members with approver rights or higher can act.</span></div></li>
+              <li><span class="asteps__n mono">6</span><div><b>Mother records the decision</b><span>Approval events are appended. The integration checks <code>/v1/approvals/{id}</code> and consumes the grant once before executing.</span></div></li>
+            </ol>
           </div>
 
           <div class="approval" aria-label="Example approval request">
@@ -806,6 +934,13 @@
                 </div>
               </li>
             </ol>
+            <div class="afields">
+              <p class="field__label">Every decision record includes</p>
+              <ul class="afields__list mono">
+                <li>decision</li><li>reason_code</li><li>reason</li><li>agent</li><li>capability</li><li>operation</li><li>resource</li><li>destination</li><li>data_class</li><li>environment</li><li>protocol · MCP server/tool</li><li>policy + version</li><li>matched policies</li><li>redacted context</li><li>request_id</li><li>decision_id</li><li>API key prefix</li><li>engine version</li><li>timestamp</li>
+              </ul>
+              <p class="afields__more">Reviews add approval status, approver, note, expiry and one-time consumption as separate events.</p>
+            </div>
             <div class="audit__foot">
               <span><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Credential-like fields in context are redacted before storage</span>
               <span><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Approvals and policy changes are separate events</span>

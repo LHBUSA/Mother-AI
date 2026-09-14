@@ -161,7 +161,7 @@ for (const width of [1440, 390]) {
   await visit(`/verify/${revokedToken}`, "verify-revoked", width);
   check(`verify page REVOKED @${width}`, /REVOKED/.test(await page.evaluate(() => document.getElementById("verify")?.textContent ?? "")));
   await visit(`/verify/${"0".repeat(32)}`, "verify-invalid", width, { expect4xx: [`/api/public/badges/${"0".repeat(32)}`] });
-  check(`verify page unknown token shows not verified @${width}`, /Verification not found/.test(await page.evaluate(() => document.getElementById("verify")?.textContent ?? "")));
+  check(`verify page unknown token shows unable to verify @${width}`, /Unable to verify/.test(await page.evaluate(() => document.getElementById("verify")?.textContent ?? "")));
   await visit("/does-not-exist", "not-found", width, { expect4xx: ["/does-not-exist"] });
 }
 

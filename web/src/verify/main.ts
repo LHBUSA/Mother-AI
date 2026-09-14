@@ -5,6 +5,7 @@ import "./verify.css";
 import { apiUrl } from "../shared/site";
 
 type Status = "active" | "setup" | "suspended" | "revoked";
+type Failure = "notfound" | "malformed" | "limited" | "error";
 
 interface PublicBadge {
   status: Status;
@@ -19,14 +20,25 @@ interface PublicBadge {
   disclaimer: string;
 }
 
-const COPY: Record<Status | "invalid" | "error" | "limited", { pill: string; title: string; summary: string; cls: string }> = {
-  active: { pill: "ACTIVE", title: "Mother AI Protected", summary: "This organization has Mother AI agent access controls configured and enabled.", cls: "s-active" },
-  setup: { pill: "NOT ACTIVE", title: "Mother AI badge not active", summary: "This organization has not completed Mother AI configuration. The badge is not active.", cls: "s-setup" },
-  suspended: { pill: "SUSPENDED", title: "Mother AI badge not active", summary: "Mother AI protection for this organization is currently suspended. The badge is not active.", cls: "s-suspended" },
-  revoked: { pill: "REVOKED", title: "Mother AI badge not active", summary: "This Mother AI badge has been revoked and no longer represents active controls.", cls: "s-revoked" },
-  invalid: { pill: "NOT VERIFIED", title: "Verification not found", summary: "This link does not match any Mother AI badge. A badge displayed with this link should not be treated as evidence of Mother AI controls.", cls: "s-invalid" },
-  limited: { pill: "NOT VERIFIED", title: "Verification temporarily unavailable", summary: "Too many verification requests from your network. Wait a minute and reload. Until then, do not treat a displayed badge as verified.", cls: "s-invalid" },
-  error: { pill: "NOT VERIFIED", title: "Verification could not be completed", summary: "Mother AI could not be reached to verify this badge. Reload to try again. Until verification succeeds, do not treat a displayed badge as verified.", cls: "s-invalid" },
+interface Copy {
+  state: string;
+  title: string;
+  summary: string;
+  cls: string;
+}
+
+const STATUS: Record<Status, Copy> = {
+  active: { state: "VERIFIED · ACTIVE", title: "Mother AI Protected", summary: "This organization has Mother AI agent access controls configured and enabled.", cls: "s-active" },
+  setup: { state: "NOT ACTIVE", title: "Badge not active", summary: "This organization has not completed Mother AI configuration. The badge is not active and is not evidence of Mother AI controls.", cls: "s-paused" },
+  suspended: { state: "SUSPENDED", title: "Badge not active", summary: "Mother AI protection for this organization is currently suspended. The badge is not active and is not evidence of Mother AI controls.", cls: "s-paused" },
+  revoked: { state: "REVOKED", title: "Badge not active", summary: "This Mother AI badge has been revoked and no longer represents active controls.", cls: "s-revoked" },
+};
+
+const FAILURE: Record<Failure, Copy> = {
+  notfound: { state: "UNABLE TO VERIFY", title: "Unable to verify", summary: "This link does not match any Mother AI badge.", cls: "s-unable" },
+  malformed: { state: "UNABLE TO VERIFY", title: "Unable to verify", summary: "This is not a valid Mother AI verification link.", cls: "s-unable" },
+  limited: { state: "UNABLE TO VERIFY", title: "Unable to verify", summary: "Too many verification requests from your network. Wait a minute, then try again.", cls: "s-unable" },
+  error: { state: "UNABLE TO VERIFY", title: "Unable to verify", summary: "Mother AI could not be reached to complete this check. Try again shortly.", cls: "s-unable" },
 };
 
 const root = document.getElementById("verify")!;
@@ -38,85 +50,111 @@ function formatDate(value: string): string {
 
 function formatUtc(value: string): string {
   const d = new Date(value);
-  return `${d.toLocaleString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} UTC`;
+  return `${d.toLocaleString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })} UTC`;
 }
 
-function setState(key: keyof typeof COPY): void {
-  const c = COPY[key];
+function applyCopy(c: Copy): void {
   root.className = `card ${c.cls}`;
   root.setAttribute("aria-busy", "false");
-  q("[data-pill]").textContent = c.pill;
+  q("[data-pill]").textContent = c.state;
   q("[data-title]").textContent = c.title;
   q("[data-summary]").textContent = c.summary;
-  document.title = `${c.title} — Mother AI`;
 }
 
-function metaItem(label: string, value: string, mono = false): HTMLElement {
+function fail(kind: Failure): void {
+  const c = FAILURE[kind];
+  applyCopy(c);
+  document.title = `${c.title} — Mother AI`;
+  q("[data-link-hint]").hidden = kind === "limited" || kind === "error";
+  q("[data-failure]").hidden = false;
+}
+
+function row(label: string, value: string, opts: { mono?: boolean; cls?: string } = {}): HTMLElement {
   const div = document.createElement("div");
+  div.className = "receipt__row";
   const dt = document.createElement("dt");
   dt.textContent = label;
   const dd = document.createElement("dd");
   dd.textContent = value;
-  if (mono) dd.style.fontFamily = "var(--font-mono)";
+  if (opts.mono) dd.classList.add("mono");
+  if (opts.cls) dd.classList.add(opts.cls);
   div.append(dt, dd);
   return div;
 }
 
-function render(data: PublicBadge): void {
-  setState(data.status);
+function render(data: PublicBadge, token: string): void {
+  const c = STATUS[data.status];
+  applyCopy(c);
   const name = data.organization.display_name;
   q("[data-org-name]").textContent = name;
   q("[data-org]").hidden = false;
-  document.title = `${COPY[data.status].title} — ${name}`;
+  document.title = `${c.title} — ${name}`;
+
+  q("[data-meta]").replaceChildren(
+    row("Organization", name),
+    row("Badge status", data.status.toUpperCase(), { mono: true, cls: "status" }),
+    row("Verification ID", token, { mono: true, cls: "id" }),
+    row("Checked at", formatUtc(data.checked_at)),
+    row("First activated", data.activated_on ? formatDate(data.activated_on) : "Not activated"),
+    row("Last gateway activity", data.last_gateway_activity_on ? formatDate(data.last_gateway_activity_on) : "None recorded yet"),
+    row("Policy engine", `${data.policy_engine} · service v${data.service_version}`, { mono: true }),
+  );
 
   const list = q<HTMLUListElement>("[data-controls]");
   list.replaceChildren();
   for (const control of data.controls) {
     const li = document.createElement("li");
+    li.className = control.met ? "is-met" : "is-unmet";
     const mark = document.createElement("span");
-    mark.className = `mark ${control.met ? "ok" : "no"}`;
+    mark.className = "mark";
     mark.setAttribute("aria-hidden", "true");
-    mark.textContent = control.met ? "✓" : "–";
     const label = document.createElement("span");
-    label.textContent = control.met ? control.label : `${control.label} — not active`;
-    li.append(mark, label);
+    label.className = "controls__label";
+    label.textContent = control.label;
+    const state = document.createElement("span");
+    state.className = "controls__state";
+    state.textContent = control.met ? "Met" : "Not met";
+    li.append(mark, label, state);
     list.append(li);
   }
+  const met = data.controls.filter((x) => x.met).length;
+  q("[data-controls-count]").textContent = `${met} of ${data.controls.length} met`;
   q("[data-controls-wrap]").hidden = data.controls.length === 0;
 
-  const meta = q("[data-meta]");
-  meta.replaceChildren(
-    metaItem("Last verified", formatUtc(data.checked_at)),
-    metaItem("Last gateway activity", data.last_gateway_activity_on ? formatDate(data.last_gateway_activity_on) : "None recorded yet"),
-    ...(data.activated_on ? [metaItem("First activated", formatDate(data.activated_on))] : []),
-    metaItem("Policy engine", `${data.policy_engine} · v${data.service_version}`, true),
-  );
-
-  const img = q<HTMLImageElement>("[data-badge-img]");
-  img.src = data.badge.svg_url;
+  q<HTMLImageElement>("[data-badge-img]").src = data.badge.svg_url;
   q("[data-badge]").hidden = false;
   q("[data-disclaimer]").textContent = data.disclaimer;
   q("[data-body]").hidden = false;
+
+  const copy = q<HTMLButtonElement>("[data-copy]");
+  const status = q("[data-copy-status]");
+  const link = `${location.origin}/verify/${token}`;
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      status.textContent = "Link copied.";
+    } catch {
+      status.textContent = link;
+    }
+  });
 }
 
 async function main(): Promise<void> {
   const match = /^\/verify\/([0-9A-Za-z]{32})\/?$/.exec(location.pathname);
-  if (!match) {
-    setState("invalid");
-    return;
-  }
+  if (!match) return fail("malformed");
+  const token = match[1]!;
   try {
-    const res = await fetch(apiUrl(`/api/public/badges/${match[1]}`), { credentials: "omit", cache: "no-store", headers: { Accept: "application/json" } });
+    const res = await fetch(apiUrl(`/api/public/badges/${token}`), { credentials: "omit", cache: "no-store", headers: { Accept: "application/json" } });
     // Always drain the body, including on 404/429, so the request completes.
     const text = await res.text();
-    if (res.status === 404) return setState("invalid");
-    if (res.status === 429) return setState("limited");
-    if (!res.ok) return setState("error");
+    if (res.status === 404) return fail("notfound");
+    if (res.status === 429) return fail("limited");
+    if (!res.ok) return fail("error");
     const data = JSON.parse(text) as PublicBadge;
-    if (!data || !(data.status in COPY) || !data.organization) return setState("error");
-    render(data);
+    if (!data || !(data.status in STATUS) || !data.organization) return fail("error");
+    render(data, token);
   } catch {
-    setState("error");
+    fail("error");
   }
 }
 

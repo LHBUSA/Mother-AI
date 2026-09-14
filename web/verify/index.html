@@ -9,55 +9,92 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+      <symbol id="g-active" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="m7.5 12.4 3 3 6-6.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+      <symbol id="g-paused" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="M9.5 8v8M14.5 8v8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></symbol>
+      <symbol id="g-revoked" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="m5 5 14 14" stroke="currentColor" stroke-width="1.8" /></symbol>
+      <symbol id="g-unable" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" /><path d="M12 7v6.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /><circle cx="12" cy="17" r="1.3" fill="currentColor" /></symbol>
+      <symbol id="g-checking" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="4 3.2" /></symbol>
+    </svg>
+
     <div class="wrap">
       <header class="top">
         <a class="brand" href="/"><img src="/brand/mark.svg" alt="" width="26" height="26" />Mother AI</a>
         <span class="eyebrow">Public verification</span>
       </header>
 
-      <main id="verify" class="card s-loading" aria-live="polite" aria-busy="true">
-        <section class="head">
-          <div class="status-row">
-            <span class="eyebrow">Mother AI Protected</span>
-            <span class="pill" role="status"><i></i><span data-pill>CHECKING</span></span>
+      <main id="verify" class="card s-loading" aria-busy="true">
+        <section class="result" aria-labelledby="verify-title">
+          <div class="result__glyph" aria-hidden="true">
+            <svg class="g g--checking"><use href="#g-checking" /></svg>
+            <svg class="g g--active"><use href="#g-active" /></svg>
+            <svg class="g g--paused"><use href="#g-paused" /></svg>
+            <svg class="g g--revoked"><use href="#g-revoked" /></svg>
+            <svg class="g g--unable"><use href="#g-unable" /></svg>
           </div>
-          <h1 data-title>Verifying…</h1>
-          <p class="org" data-org hidden>Organization: <strong data-org-name></strong></p>
-          <p class="summary" data-summary>Checking this badge against Mother AI.</p>
+          <div class="result__text" role="status">
+            <p class="result__state"><span class="eyebrow">Badge verification</span><span class="state" data-pill>CHECKING</span></p>
+            <h1 id="verify-title" data-title>Verifying…</h1>
+            <p class="org" data-org hidden><span class="org__label">Organization</span> <strong data-org-name></strong></p>
+            <p class="summary" data-summary>Checking this badge live against Mother AI.</p>
+          </div>
         </section>
+
         <section class="body" data-body hidden>
-          <div data-controls-wrap>
-            <h2>Controls</h2>
-            <ul data-controls></ul>
+          <div class="block">
+            <h2>Verification receipt</h2>
+            <dl class="receipt" data-meta></dl>
           </div>
-          <dl class="meta" data-meta></dl>
-          <div class="badge" data-badge hidden>
-            <img data-badge-img alt="" width="236" height="48" />
-            <span class="muted">Badge state is rendered live by Mother AI.</span>
+          <div class="block" data-controls-wrap>
+            <h2>Controls checked <span class="count" data-controls-count></span></h2>
+            <ul class="controls" data-controls></ul>
+          </div>
+          <div class="block badge" data-badge hidden>
+            <h2>Live badge</h2>
+            <div class="badge__row">
+              <span class="badge__frame"><img data-badge-img alt="" width="236" height="48" /></span>
+              <p class="muted">Rendered from the same record as this page. A badge image alone is not proof — this page is.</p>
+            </div>
+          </div>
+          <div class="actions">
+            <button type="button" class="copy" data-copy>Copy verification link</button>
+            <span class="muted" data-copy-status aria-live="polite"></span>
           </div>
         </section>
+
+        <section class="failure" data-failure hidden>
+          <h2>What this means</h2>
+          <ul class="failure__list">
+            <li>Do not treat a Mother AI badge shown with this link as evidence of Mother AI controls.</li>
+            <li data-link-hint>A valid link has the form <code>/verify/</code> followed by a 32-character verification ID.</li>
+            <li>If you were given this link by an organization, ask them for a current verification link.</li>
+          </ul>
+          <p class="actions"><a class="copy" href="" data-retry>Try again</a></p>
+        </section>
+
         <p class="disclaimer" data-disclaimer>
           Mother AI Protected indicates that this organization has configured and enabled Mother AI agent access controls. It is not a certification of the organization's entire cybersecurity program or a guarantee against security incidents.
         </p>
       </main>
 
       <noscript>
-        <main class="card s-invalid noscript">
-          <section class="head">
-            <div class="status-row">
-              <span class="eyebrow">Mother AI Protected</span>
-              <span class="pill"><i></i>NOT VERIFIED</span>
+        <style>#verify{display:none}</style>
+        <div class="card s-unable noscript">
+          <section class="result">
+            <div class="result__glyph" aria-hidden="true"><svg class="g g--unable"><use href="#g-unable" /></svg></div>
+            <div class="result__text">
+              <p class="result__state"><span class="eyebrow">Badge verification</span><span class="state">UNABLE TO VERIFY</span></p>
+              <h1>JavaScript is required to verify this badge</h1>
+              <p class="summary">
+                This page checks the badge live against Mother AI. Enable JavaScript and reload. Until the check completes, do not treat a displayed badge as evidence of Mother AI controls.
+              </p>
             </div>
-            <h1>JavaScript is required to verify this badge</h1>
-            <p class="summary">
-              This page checks the badge live against Mother AI. Enable JavaScript and reload. Until the check completes, do not treat a displayed badge as evidence of Mother AI controls.
-            </p>
           </section>
-        </main>
+        </div>
       </noscript>
 
       <footer class="foot">
-        <span>Verified by Mother AI</span>
+        <span>Verification is performed live by Mother AI on every visit.</span>
         <span><a href="/">What is Mother AI?</a> · <a href="https://github.com/LHBUSA/Mother-AI/blob/main/docs/BADGE.md">Badge criteria</a></span>
       </footer>
     </div>
