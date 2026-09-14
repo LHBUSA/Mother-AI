@@ -200,6 +200,16 @@ await clickText("Sign in with passkey");
 await page.waitForFunction(() => location.pathname === "/app/", { timeout: 20_000 });
 await settle();
 check("passkey sign-in in Chrome lands on /app/", page.url() === `${ORIGIN}/app/`);
+// Persist the signature counter right away: if a later step crashes, the next run must not
+// replay a stale counter (the server correctly rejects counter regression).
+{
+  const { credentials: live } = await cdp.send("WebAuthn.getCredentials", { authenticatorId });
+  const current = live.find((c) => Buffer.from(c.credentialId, "base64").toString("base64url") === cred.id);
+  if (current) {
+    cred.counter = current.signCount;
+    writeFileSync(SECRETS, JSON.stringify(secrets, null, 2));
+  }
+}
 {
   const { cookies } = await cdp.send("Network.getAllCookies");
   const session = cookies.filter((c) => c.name === "__Host-mai_session");
@@ -214,8 +224,8 @@ check("passkey sign-in in Chrome lands on /app/", page.url() === `${ORIGIN}/app/
 }
 
 // ---- Console pages ----------------------------------------------------------------
-const agents = await page.evaluate(async () => (await (await fetch("/api/console/agents")).json()).agents);
-const policies = await page.evaluate(async () => (await (await fetch("/api/console/policies")).json()).policies);
+const agents = await page.evaluate(async (api) => (await (await fetch(`${api}/api/console/agents`, { credentials: "include" })).json()).agents, API);
+const policies = await page.evaluate(async (api) => (await (await fetch(`${api}/api/console/policies`, { credentials: "include" })).json()).policies, API);
 const billing = agents.find((a) => a.agent_key === "billing-agent-prod");
 const reviewPolicy = policies.find((p) => p.effect === "review");
 const routes = [
@@ -250,7 +260,7 @@ const drawerClosed = await page.evaluate(() => document.querySelector('button[ar
 check("mobile nav opens and closes with Escape", drawerOpen && drawerClosed);
 
 // Audit detail (opened via ?open=<decision_id>, the same URL the timeline row uses)
-const decisions = await page.evaluate(async () => (await (await fetch("/api/console/decisions?decision=review")).json()).decisions);
+const decisions = await page.evaluate(async (api) => (await (await fetch(`${api}/api/console/decisions?decision=review`, { credentials: "include" })).json()).decisions, API);
 for (const width of [1440, 390]) {
   await visit(`/app/audit?open=${decisions[0].id}`, "console-audit-detail", width);
   const detailText = await page.evaluate(() => document.querySelector('[aria-label="Decision detail"]')?.textContent ?? "");
@@ -264,7 +274,7 @@ await page.keyboard.type("Browser QA approval");
 await clickText("Approve", { last: true });
 await new Promise((r) => setTimeout(r, 2000));
 await shot("console-approvals-after", 1440);
-const resolved = await page.evaluate(async () => (await (await fetch("/api/console/approvals?status=resolved")).json()).approvals);
+const resolved = await page.evaluate(async (api) => (await (await fetch(`${api}/api/console/approvals?status=resolved`, { credentials: "include" })).json()).approvals, API);
 check("approval approved through UI is recorded", resolved.some((a) => a.status === "approved" && a.note === "Browser QA approval" && a.acted_by_name === "Mother AI QA"));
 
 // Create and revoke an API key through the UI
