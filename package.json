@@ -16,7 +16,7 @@
     "db:migrate:local": "wrangler d1 migrations apply mother-ai-prod --local",
     "db:migrate:prod": "wrangler d1 migrations apply mother-ai-prod --remote",
     "deploy": "node scripts/deploy.mjs",
-    "verify:prod": "node scripts/verify-prod.mjs"
+    "verify:prod": "node scripts/qa/verify-prod.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "14.0.0",
