@@ -18,4 +18,6 @@ export interface Env {
 
   /** Secret: signs founding-access form timing tokens. */
   FORM_SIGNING_KEY?: string;
+  /** Secret: Slack Incoming Webhook for #leads. Never logged or returned. */
+  SLACK_LEADS_WEBHOOK_URL?: string;
 }

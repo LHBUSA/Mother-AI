@@ -12,6 +12,7 @@ function siteMeta(): Plugin {
   const values: Record<string, string> = {
     SITE_ORIGIN: uiOrigin,
     SITE_API_ORIGIN: apiOrigin,
+    SITE_BOOKING_URL: site.bookingUrl,
     SITE_NAME: site.name,
     SITE_TITLE: site.title,
     SITE_DESCRIPTION: site.description,

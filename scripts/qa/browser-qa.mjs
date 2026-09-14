@@ -304,25 +304,55 @@ await shot("console-key-revoked", 1440);
 const afterRevoke = await gateway("/v1/evaluate", { agent_id: "research-agent-prod", capability: "knowledge", operation: "read" }, secret);
 check("UI-created key works, then UI revoke blocks it", beforeRevoke.body.decision === "allow" && afterRevoke.status === 401 && afterRevoke.body.error?.code === "API_KEY_REVOKED");
 
-// Founding Access form submitted from the real browser directly to the API host
-{
-  await page.setViewport({ width: 1440, height: 900 });
+// Founding Access form (pre-submit layout, submission, Calendly success CTA) at 1440 and 390,
+// submitted from the real browser directly to the API host.
+for (const width of [1440, 390]) {
+  await page.setViewport({ width, height: width === 390 ? 844 : 900 });
   await page.goto(`${ORIGIN}/#founding-access`, { waitUntil: "networkidle0" });
   await settle();
   await page.evaluate(() => document.querySelector("#founding-access")?.scrollIntoView());
-  const email = `qa+founding-ui-${run}@localhomebuyersusa.com`;
+  const before = await page.evaluate(() => ({
+    fields: ["name", "company", "work_email", "use_case", "agent_count", "uses_mcp"].every((n) => !!document.querySelector(`[data-fa-form] [name="${n}"]`)),
+    formVisible: !!document.querySelector("[data-fa-form]") && !document.querySelector("[data-fa-form]").hidden,
+    doneHidden: !!document.querySelector("[data-fa-done]")?.hidden,
+    talkHref: document.querySelector("[data-booking-link]")?.getAttribute("href"),
+    talkTarget: document.querySelector("[data-booking-link]")?.getAttribute("target"),
+  }));
+  await shot("founding-access-form", width);
+  check(`Founding Access form unchanged before submit, with booking link @${width}`, before.fields && before.formVisible && before.doneHidden && before.talkHref === SITE.bookingUrl && before.talkTarget === "_blank", JSON.stringify(before));
+
+  const email = `qa+founding-ui-${width}-${run}@localhomebuyersusa.com`;
   await page.type('[data-fa-form] [name="name"]', "Mother AI QA");
   await page.type('[data-fa-form] [name="company"]', "Mother AI QA (internal)");
   await page.type('[data-fa-form] [name="work_email"]', email);
-  await page.type('[data-fa-form] [name="use_case"]', "Internal browser QA of Founding Access before the Vercel cutover.");
+  await page.type('[data-fa-form] [name="use_case"]', `Internal browser QA of Founding Access + Slack lead routing (${width}px). Not a customer request.`);
   await page.select('[data-fa-form] [name="agent_count"]', "1-5");
   await page.select('[data-fa-form] [name="uses_mcp"]', "evaluating");
   await new Promise((r) => setTimeout(r, 4000)); // minimum submit time is enforced server-side
   await page.click("[data-fa-submit]");
   await page.waitForFunction(() => { const d = document.querySelector("[data-fa-done]"); return d && !d.hidden; }, { timeout: 15_000 }).catch(() => {});
-  const done = await page.evaluate(() => { const d = document.querySelector("[data-fa-done]"); return !!d && !d.hidden; });
-  await shot("founding-access-submitted", 1440);
-  check("Founding Access form submits from the browser to the API host", done && apiRequests.some((r) => r.origin === API && r.path === "/api/founding-access" && r.method === "POST"));
+  const after = await page.evaluate(() => {
+    const done = document.querySelector("[data-fa-done]");
+    const cta = document.querySelector("[data-booking-cta]");
+    const r = cta?.getBoundingClientRect();
+    return {
+      done: !!done && !done.hidden,
+      text: done?.textContent?.replace(/\s+/g, " ").trim() ?? "",
+      ctaHref: cta?.getAttribute("href"),
+      ctaTarget: cta?.getAttribute("target"),
+      ctaRel: cta?.getAttribute("rel"),
+      ctaVisible: !!r && r.width > 0 && r.height > 0 && r.right <= window.innerWidth + 0.5,
+      iframes: document.querySelectorAll("iframe").length,
+    };
+  });
+  await shot("founding-access-submitted", width);
+  check(
+    `Founding Access success shows the Calendly CTA @${width}`,
+    after.done && /Request received\./.test(after.text) && /Want to move faster\?/.test(after.text) && /Book 30 minutes with Justin/.test(after.text) &&
+      after.ctaHref === "https://calendly.com/proptechusa/new-meeting-1" && after.ctaTarget === "_blank" && /noopener/.test(after.ctaRel ?? "") && after.ctaVisible && after.iframes === 0 &&
+      apiRequests.some((r) => r.origin === API && r.path === "/api/founding-access" && r.method === "POST"),
+    JSON.stringify({ ...after, text: after.text.slice(0, 80) }),
+  );
 }
 
 // No API traffic was proxied through the UI host

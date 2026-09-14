@@ -64,7 +64,7 @@ It does not detect intent, "rogue AI", consciousness or sentience, and it does n
 
 ## Secrets
 
-- No secrets in Git or in the browser bundle. Worker secret: `FORM_SIGNING_KEY` (Founding Access form timing tokens and the IP-hash salt). The Vercel UI needs no secrets.
+- No secrets in Git or in the browser bundle. Worker secrets: `FORM_SIGNING_KEY` (Founding Access form timing tokens and the IP-hash salt) and `SLACK_LEADS_WEBHOOK_URL` (Slack Incoming Webhook for `#leads`; never logged). The Vercel UI needs no secrets.
 - API keys are never logged. Stored `context`/`resource` are redacted (see `src/lib/redact.ts`). Error responses never include stack traces or internal messages.
 - Raw client IPs are not stored for Founding Access; a daily-salted hash is.
 
@@ -97,7 +97,7 @@ Preflights from other origins get `403` with no CORS headers. Browser API traffi
 
 - Gateway: per-IP limit before key lookup, per-key limit after.
 - Public demo: per-IP limit; stateless; runs against a fixed in-code workspace and never touches tenant data.
-- Founding Access: 5/min per-IP limit, HMAC-signed form token (minimum 3 s, maximum 2 h age), honeypot field, 24 h duplicate suppression, strict validation, daily-salted IP hash (raw IPs are not stored). No CAPTCHA/Turnstile is used.
+- Founding Access: 5/min per-IP limit, HMAC-signed form token (minimum 3 s, maximum 2 h age), honeypot field, 24 h duplicate suppression, strict validation, daily-salted IP hash (raw IPs are not stored). No CAPTCHA/Turnstile is used. Only a newly inserted lead notifies Slack (background, after the D1 insert); the Slack message carries lead fields only — never the IP, IP hash, form token or secrets.
 - Sign-in: per-IP limit; single-use challenges.
 - Public badge verification (`/badge/*.svg`, `/api/public/badges/*`): per-IP limit.
 - Request bodies ≤ 32 KB; `context` ≤ 8 KB, depth ≤ 6.

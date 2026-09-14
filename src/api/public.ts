@@ -9,6 +9,7 @@ import { evaluateSafely, ENGINE_VERSION } from "../gateway/policy-engine";
 import { normalizeEvaluateRequest } from "../gateway/normalize";
 import { DEMO_AGENTS, DEMO_POLICIES, DEMO_SCENARIOS } from "../demo/workspace";
 import { SERVICE_NAME, SERVICE_VERSION } from "../version";
+import { notifySlackLead } from "../leads/slack";
 
 // ---------------------------------------------------------------------------
 // Demo
@@ -132,7 +133,7 @@ function text(body: Record<string, unknown>, key: string, min: number, max: numb
   return t;
 }
 
-export async function foundingAccessSubmit(request: Request, env: Env, nowMs: number): Promise<Response> {
+export async function foundingAccessSubmit(request: Request, env: Env, nowMs: number, ctx: { waitUntil(promise: Promise<unknown>): void }): Promise<Response> {
   const ip = clientIp(request);
   const { success } = await env.RL_FORMS.limit({ key: ip });
   if (!success) throw new ApiError(429, "RATE_LIMITED", "Too many submissions. Try again in a minute.");
@@ -164,13 +165,20 @@ export async function foundingAccessSubmit(request: Request, env: Env, nowMs: nu
   if (duplicate) return json({ ok: true }, 201);
 
   const ipHash = await sha256Hex(`${ip}|${now.slice(0, 10)}|${env.FORM_SIGNING_KEY}`);
+  const leadId = newId("fa");
   // `turnstile` is a legacy column from V1 (CHECK constraint); Turnstile is not used, so it is always 'not_configured'.
   await env.DB.prepare(
     `INSERT INTO founding_access_requests (id, name, company, work_email, use_case, agent_count, uses_mcp, ip_hash, turnstile, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(newId("fa"), name, company, email, useCase, agentCount, usesMcp, ipHash, "not_configured", now)
+    .bind(leadId, name, company, email, useCase, agentCount, usesMcp, ipHash, "not_configured", now)
     .run();
+
+  // Only a NEW, successfully inserted lead notifies Slack — in the background, so Slack
+  // availability never changes the visitor's response or the saved lead.
+  ctx.waitUntil(
+    notifySlackLead(env.SLACK_LEADS_WEBHOOK_URL, { id: leadId, name, company, work_email: email, use_case: useCase, agent_count: agentCount, uses_mcp: usesMcp, created_at: now }),
+  );
   return json({ ok: true }, 201);
 }
 

@@ -16,7 +16,8 @@ git checkout main && git pull --ff-only && git status
 | D1 | `mother-ai-prod` → `DB` | Canonical data |
 | Rate limiting | `RL_*` (namespaces 4101–4107) | Abuse controls |
 | Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup |
-| Secret | `FORM_SIGNING_KEY` | Founding Access form tokens |
+| Secret | `FORM_SIGNING_KEY` | Founding Access form tokens and IP-hash salt |
+| Secret | `SLACK_LEADS_WEBHOOK_URL` | Slack Incoming Webhook for `#leads` (new Founding Access leads) |
 | UI host | `mother.proptechusa.ai` | Public UI on Vercel (DNS-only CNAME `78326c855bbef250.vercel-dns-016.com`) and WebAuthn RP ID |
 | Fallback host | `mother-ai.sales-fd3.workers.dev` | Operational API fallback; human pages 308 to the UI host |
 
@@ -43,6 +44,18 @@ Creates a new user identity with the given role. Disable the old membership from
 ```bash
 npx wrangler d1 execute mother-ai-prod --remote --command "SELECT created_at, name, company, work_email, agent_count, uses_mcp, use_case FROM founding_access_requests ORDER BY created_at DESC LIMIT 50"
 ```
+
+## Founding Access lead notifications (Slack)
+
+New leads (a new `founding_access_requests` row) post to Slack `#leads` from the Worker in the background. Honeypot, duplicate-within-24h, invalid and rate-limited submissions never notify. If Slack fails, the lead stays saved, the visitor still sees success, and the Worker logs `slack lead notification failed` with the lead id and status (never the webhook URL).
+
+Set or rotate the webhook (paste it only into Wrangler's prompt):
+
+```bash
+npx wrangler secret put SLACK_LEADS_WEBHOOK_URL --name mother-ai
+```
+
+The booking link shown after submission and in Slack is `bookingUrl` in `config/site.json` (https://calendly.com/proptechusa/new-meeting-1).
 
 ## Suspend or revoke an organization
 

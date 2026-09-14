@@ -36,7 +36,7 @@ async function handleApi(request: Request, env: Env, nowMs: number, ctx: Executi
     if (pathname === "/api/demo/workspace") return request.method === "GET" ? demoWorkspace() : methodNotAllowed(["GET"]);
     if (pathname === "/api/demo/evaluate") return request.method === "POST" ? await demoEvaluate(request, env) : methodNotAllowed(["POST"]);
     if (pathname === "/api/founding-access/token") return request.method === "GET" ? await foundingAccessToken(env, nowMs) : methodNotAllowed(["GET"]);
-    if (pathname === "/api/founding-access") return request.method === "POST" ? await foundingAccessSubmit(request, env, nowMs) : methodNotAllowed(["POST"]);
+    if (pathname === "/api/founding-access") return request.method === "POST" ? await foundingAccessSubmit(request, env, nowMs, ctx) : methodNotAllowed(["POST"]);
     const publicBadge = PUBLIC_BADGE.exec(pathname);
     if (publicBadge) return request.method === "GET" ? await handlePublicBadge(request, env, publicBadge[1]!, nowMs, ctx) : methodNotAllowed(["GET"]);
     throw new ApiError(404, "NOT_FOUND", "Not found.");

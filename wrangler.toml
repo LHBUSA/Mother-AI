@@ -1,6 +1,9 @@
-# Mother AI — one Worker owns the marketing site, control plane, gateway API,
-# badge endpoints and static assets. Production must always correspond to a
-# committed, pushed `main`; deploy with `npm run deploy` (scripts/deploy.mjs).
+# Mother AI — API Worker: gateway, passkey auth, control-plane API, public browser
+# APIs (demo, Founding Access + Slack lead notifications), badge SVGs and cron. The public
+# UI is served by Vercel. Production must always correspond to a committed, pushed `main`;
+# deploy with `npm run deploy` (scripts/deploy.mjs).
+#
+# Secrets (npx wrangler secret put <NAME> --name mother-ai): FORM_SIGNING_KEY, SLACK_LEADS_WEBHOOK_URL.
 
 name = "mother-ai"
 main = "src/worker.ts"
