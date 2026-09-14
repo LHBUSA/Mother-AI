@@ -89,7 +89,7 @@ describe("passkey authentication", () => {
     expect(await replay.json()).toMatchObject({ error: { code: "CHALLENGE_EXPIRED" } });
 
     const stranger = new SoftwareAuthenticator();
-    await stranger.register({ ...options, challenge: "x" }, ORIGIN);
+    await stranger.register({ ...(options as Record<string, unknown>), challenge: "x" }, ORIGIN);
     const loginOpts = await call(env, "/api/auth/login/options", { json: {} });
     const loginJar = new Map<string, string>();
     cookiesFrom(loginOpts, loginJar);
