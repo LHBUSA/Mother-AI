@@ -15,7 +15,7 @@ git checkout main && git pull --ff-only && git status
 | API host | `api.mother.proptechusa.ai` (Workers Custom Domain) | Browser and server API traffic |
 | D1 | `mother-ai-prod` → `DB` | Canonical data |
 | Rate limiting | `RL_*` (namespaces 4101–4107) | Abuse controls |
-| Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup, approval notification retries and resolution events |
+| Cron | `*/10 * * * *` | Approval expiry sweep, session/challenge cleanup, approval notification retries and resolution events, containment verification and security alert delivery |
 | Secret | `FORM_SIGNING_KEY` | Founding Access form tokens and IP-hash salt |
 | Secret | `SLACK_LEADS_WEBHOOK_URL` | Slack Incoming Webhook for `#leads` (new Founding Access leads) |
 | Secret | `NOTIFICATION_ENCRYPTION_KEY` | 32-byte base64url AES-GCM key that encrypts each organization's approval-notification webhook in D1 |

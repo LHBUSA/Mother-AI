@@ -25,6 +25,7 @@ interface ApprovalItem {
   policy: { id: string; name: string | null; effect: string | null; version: number | null } | null;
   agent: { display_name: string | null; environment: string | null };
   notification: { channel: "slack"; status: NotificationStatus; error: string | null } | null;
+  termination: { reason: "quarantine"; incident_id: string; by: "system" } | null;
 }
 
 interface ApprovalsResponse {
@@ -200,7 +201,12 @@ function ApprovalCard({ a, skewMs, onAct, canApprove }: { a: ApprovalItem; skewM
       ) : (
         <footer className="approval-foot approval-foot-resolved">
           <span className="small">
-            {status === "expired" ? (
+            {a.termination ? (
+              <>
+                Cancelled by quarantine {relativeTime(a.acted_at, now)} — not a human decision.{" "}
+                <Link to={`/app/security/incidents/${a.termination.incident_id}`} className="link-sm">View incident</Link>
+              </>
+            ) : status === "expired" ? (
               <>Expired without a decision {relativeTime(a.acted_at ?? a.expires_at, now)}.</>
             ) : (
               <>

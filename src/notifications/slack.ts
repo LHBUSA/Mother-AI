@@ -176,3 +176,77 @@ export function buildTestSlackPayload(organization: string, actor: string): Reco
     ],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Security incident alerts (runtime containment)
+// ---------------------------------------------------------------------------
+
+export interface SecurityAlertData {
+  event: "risk_elevated" | "review_required" | "quarantined" | "containment_completed" | "cleared";
+  organization: string;
+  subjectType: string;
+  subjectLabel: string;
+  fromState: string;
+  toState: string;
+  score: number;
+  signals: string;
+  incidentId: string | null;
+  scope: { sessions: number; childAgents: number; revokedLeases: number; cancelledApprovals: number; invalidatedGrants: number };
+  clearedBy: string | null;
+}
+
+export const SECURITY_URL = `${site.origin}/app/security`;
+
+const SECURITY_TITLE: Record<SecurityAlertData["event"], string> = {
+  risk_elevated: "MOTHER AI · RISK ELEVATED",
+  review_required: "MOTHER AI · RUNTIME REVIEW REQUIRED",
+  quarantined: "MOTHER AI · QUARANTINED",
+  containment_completed: "MOTHER AI · CONTAINMENT COMPLETED",
+  cleared: "MOTHER AI · QUARANTINE CLEARED",
+};
+
+function securitySummary(d: SecurityAlertData): string {
+  const subject = `${d.subjectType} ${clean(d.subjectLabel, 160)}`;
+  switch (d.event) {
+    case "risk_elevated":
+      return `Deterministic runtime risk for ${subject} rose to elevated (score ${d.score}). No enforcement change yet.`;
+    case "review_required":
+      return `Runtime risk for ${subject} requires human review (score ${d.score}). Allowed actions in this scope now need approval.`;
+    case "quarantined":
+      return `${subject} is quarantined. Every new action in scope is blocked, live leases are revoked, pending approvals are cancelled and older grants can never be used.`;
+    case "containment_completed":
+      return `Containment for ${subject} is complete: no live lease and no pending approval remains in scope. It stays blocked until an authorized human clears it.`;
+    case "cleared":
+      return `${subject} was cleared by ${clean(d.clearedBy, 120)}. Grants and leases issued before the quarantine remain invalid; new authority must be issued.`;
+  }
+}
+
+export function buildSecuritySlackPayload(d: SecurityAlertData): Record<string, unknown> {
+  const title = SECURITY_TITLE[d.event];
+  const fields: Array<[string, string]> = [
+    ["Organization", clean(d.organization, 120)],
+    ["Subject", `${clean(d.subjectType, 20)} \`${clean(d.subjectLabel, 160)}\``],
+    ["State", `${clean(d.fromState, 20)} → ${clean(d.toState, 20)}`],
+    ["Score", String(d.score)],
+    ["Signals", clean(d.signals, 300)],
+  ];
+  if (d.incidentId) fields.push(["Incident", `\`${clean(d.incidentId, 40)}\``]);
+  if (d.event === "quarantined" || d.event === "containment_completed") {
+    fields.push([
+      "Scope",
+      `${d.scope.sessions} sessions · ${d.scope.childAgents} child agents · ${d.scope.revokedLeases} leases revoked · ${d.scope.cancelledApprovals} approvals cancelled · ${d.scope.invalidatedGrants} grants invalidated`,
+    ]);
+  }
+  return {
+    text: [title, `Organization: ${clean(d.organization, 120)}`, securitySummary(d), d.incidentId ? `Incident ${d.incidentId}` : ""].filter(Boolean).join("\n"),
+    unfurl_links: false,
+    unfurl_media: false,
+    blocks: [
+      { type: "header", text: { type: "plain_text", text: title, emoji: false } },
+      { type: "section", text: { type: "mrkdwn", text: securitySummary(d) } },
+      { type: "section", fields: fields.map(([label, value]) => ({ type: "mrkdwn", text: `*${label}*\n${value}` })) },
+      { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Open Security", emoji: false }, url: SECURITY_URL }] },
+      { type: "context", elements: [{ type: "mrkdwn", text: "Deterministic rules (mre-1.0.0). Mother only sees actions routed through Mother." }] },
+    ],
+  };
+}

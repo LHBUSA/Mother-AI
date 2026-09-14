@@ -22,6 +22,7 @@ import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken,
 import { handleBadgeSvg, handlePublicBadge } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
 import { sweepApprovalNotifications } from "./notifications/approvals";
+import { sweepRuntimeSecurity } from "./runtime/alerts";
 import { robotsTxt } from "./lib/seo";
 import { canonicalRedirect } from "./lib/site";
 import { applyCors, preflight } from "./lib/cors";
@@ -103,6 +104,12 @@ export default {
           console.log("approval notification sweep complete", result);
         } catch (err) {
           console.error("approval notification sweep failed", err instanceof Error ? err.name : "unknown");
+        }
+        try {
+          const runtime = await sweepRuntimeSecurity(env);
+          console.log("runtime security sweep complete", runtime);
+        } catch (err) {
+          console.error("runtime security sweep failed", err instanceof Error ? err.name : "unknown");
         }
       })(),
     );

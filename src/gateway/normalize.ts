@@ -16,10 +16,58 @@ const MCP_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
 const PRINTABLE = /^[^\x00-\x1f\x7f]{1,512}$/;
 export const ENVIRONMENTS = ["production", "staging", "development"] as const;
 
+export interface CorrelationInput {
+  sessionId: string | null;
+  parentDecisionId: string | null;
+  lease: { ttlSeconds: number; maxUses: number } | null;
+}
+
 export interface NormalizedRequest {
   requestId: string | null;
   action: NormalizedAction;
   contextBytes: number;
+  /** Optional runtime correlation. Absent for every existing client. */
+  correlation: CorrelationInput | null;
+}
+
+const SESSION_ID = /^asn_[0-9A-Za-z]{22}$/;
+const DECISION_ID = /^dec_[0-9A-Za-z]{22}$/;
+export const LEASE_TTL = { min: 5, max: 600, default: 120 };
+export const LEASE_USES = { min: 1, max: 20, default: 1 };
+
+function parseCorrelation(body: Record<string, unknown>, errors: FieldErrors): CorrelationInput | null {
+  const sessionId = optionalString(body, "session_id", SESSION_ID, errors);
+  const parentDecisionId = optionalString(body, "parent_decision_id", DECISION_ID, errors);
+  let lease: CorrelationInput["lease"] = null;
+  if (body.lease !== undefined && body.lease !== null) {
+    if (typeof body.lease !== "object" || Array.isArray(body.lease)) {
+      errors.lease = "must be an object";
+    } else {
+      const raw = body.lease as Record<string, unknown>;
+      const leaseErrors: FieldErrors = {};
+      checkKeys(raw, ["ttl_seconds", "max_uses"], leaseErrors);
+      const int = (key: string, range: { min: number; max: number; default: number }) => {
+        const v = raw[key];
+        if (v === undefined || v === null) return range.default;
+        if (typeof v !== "number" || !Number.isInteger(v) || v < range.min || v > range.max) {
+          leaseErrors[key] = `must be an integer between ${range.min} and ${range.max}`;
+          return range.default;
+        }
+        return v;
+      };
+      lease = { ttlSeconds: int("ttl_seconds", LEASE_TTL), maxUses: int("max_uses", LEASE_USES) };
+      for (const [k, v] of Object.entries(leaseErrors)) errors[`lease.${k}`] = v;
+      if (!sessionId && !errors.session_id) errors.lease = "requires session_id";
+    }
+  }
+  return sessionId || parentDecisionId || lease ? { sessionId, parentDecisionId, lease } : null;
+}
+
+/** Fingerprint input: identical to the action for requests without correlation fields. */
+export function fingerprintInput(request: NormalizedRequest): unknown {
+  if (!request.correlation) return request.action;
+  const c = request.correlation;
+  return { ...request.action, __correlation: { session_id: c.sessionId, parent_decision_id: c.parentDecisionId, lease: c.lease } };
 }
 
 type FieldErrors = Record<string, string>;
@@ -120,6 +168,9 @@ const EVALUATE_FIELDS = [
   "environment",
   "context",
   "mcp",
+  "session_id",
+  "parent_decision_id",
+  "lease",
 ];
 
 /** POST /v1/evaluate body. */
@@ -162,11 +213,13 @@ export function normalizeEvaluateRequest(body: Record<string, unknown>): Normali
   if (protocol === "api" && body.mcp !== undefined && body.mcp !== null) {
     errors.mcp = 'is only allowed when protocol is "mcp"';
   }
+  const correlation = parseCorrelation(body, errors);
 
   if (Object.keys(errors).length) invalid(errors);
 
   return {
     requestId,
+    correlation,
     contextBytes: context.bytes,
     action: {
       agent,
@@ -184,7 +237,7 @@ export function normalizeEvaluateRequest(body: Record<string, unknown>): Normali
   };
 }
 
-const MCP_FIELDS = ["request_id", "agent_id", "server", "tool", "arguments", "resource", "destination", "data_class", "environment"];
+const MCP_FIELDS = ["request_id", "agent_id", "server", "tool", "arguments", "resource", "destination", "data_class", "environment", "session_id", "parent_decision_id", "lease"];
 
 /**
  * POST /v1/mcp/evaluate body. An MCP tool call becomes:
@@ -205,11 +258,13 @@ export function normalizeMcpRequest(body: Record<string, unknown>): NormalizedRe
   const args = validateContext(body.arguments, "arguments", errors);
   if (server && !TOKEN.test(server.toLowerCase())) errors.server = "has an invalid format";
   if (tool && !TOKEN.test(tool.toLowerCase())) errors.tool = "has an invalid format";
+  const correlation = parseCorrelation(body, errors);
 
   if (Object.keys(errors).length) invalid(errors);
 
   return {
     requestId,
+    correlation,
     contextBytes: args.bytes,
     action: {
       agent,

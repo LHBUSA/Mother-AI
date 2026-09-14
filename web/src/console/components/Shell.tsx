@@ -14,6 +14,7 @@ import {
   IconMenu,
   IconOverview,
   IconPolicies,
+  IconSecurity,
   IconSettings,
   IconSignOut,
 } from "./icons";
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/app/agents", label: "Agents", icon: IconAgents, match: (p: string) => p.startsWith("/app/agents") },
   { to: "/app/policies", label: "Policies", icon: IconPolicies, match: (p: string) => p.startsWith("/app/policies") },
   { to: "/app/approvals", label: "Approvals", icon: IconApprovals, match: (p: string) => p.startsWith("/app/approvals") },
+  { to: "/app/security", label: "Security", icon: IconSecurity, match: (p: string) => p.startsWith("/app/security") },
   { to: "/app/audit", label: "Audit", icon: IconAudit, match: (p: string) => p.startsWith("/app/audit") },
   { to: "/app/integrations", label: "Integrations", icon: IconIntegrations, match: (p: string) => p.startsWith("/app/integrations") },
   { to: "/app/badge", label: "Badge", icon: IconBadge, match: (p: string) => p.startsWith("/app/badge") },

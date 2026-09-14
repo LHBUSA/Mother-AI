@@ -4662,3 +4662,78 @@ input[type="date"].input {
     flex: none;
   }
 }
+
+/* ------------------------------------------------------------------ runtime security */
+.sec-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  margin: 0 0 8px;
+}
+.sec-strip-item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.sec-boundary {
+  margin: 0 0 16px;
+}
+.sec-card-note {
+  padding: 12px 16px 0;
+  margin: 0;
+}
+.sec-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin: 0 0 16px;
+  border: 1px solid var(--line);
+}
+.sec-banner-bad {
+  border-color: rgba(238, 106, 95, 0.4);
+  background: var(--block-bg);
+}
+.sec-banner-ok {
+  border-color: rgba(183, 255, 74, 0.35);
+  background: var(--allow-bg);
+}
+.sec-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.sec-timeline li {
+  display: grid;
+  gap: 4px;
+}
+.br-group {
+  margin-top: 14px;
+}
+.br-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.br-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  min-width: 0;
+}
+.br-list li .mono {
+  overflow-wrap: anywhere;
+}
+tr.is-link {
+  cursor: pointer;
+}

@@ -27,6 +27,8 @@ interface OrgSettings {
   default_decision: "block" | "review";
   approval_ttl_seconds: number;
   approval_grant_ttl_seconds: number;
+  runtime_protection: "off" | "monitor" | "enforce";
+  security_alerts_enabled: boolean;
   created_at: string;
 }
 
@@ -67,6 +69,8 @@ function OrganizationTab() {
           default_decision: form.default_decision,
           approval_ttl_seconds: form.approval_ttl_seconds,
           approval_grant_ttl_seconds: form.approval_grant_ttl_seconds,
+          runtime_protection: form.runtime_protection,
+          security_alerts_enabled: form.security_alerts_enabled,
         },
       });
       setData(res);
@@ -138,6 +142,34 @@ function OrganizationTab() {
           </Alert>
         )}
         {!form.require_registered_agents && org.require_registered_agents && <Alert tone="warn">Unregistered agent ids will be evaluated against organization-wide policies instead of being blocked outright.</Alert>}
+      </Card>
+
+      <Card title="Runtime protection">
+        <ul className="setting-list">
+          <li className="setting">
+            <div>
+              <div className="setting-title">Mode</div>
+              <p className="muted small">
+                <b>Monitor</b> records deterministic runtime signals without changing any decision. <b>Enforce</b> lets runtime risk require review or quarantine an agent or session; a quarantine blocks everything in scope until a human clears it. The mode cannot leave Enforce while a quarantine is active.
+              </p>
+            </div>
+            <Select value={form.runtime_protection} disabled={!editable} onChange={(e) => set("runtime_protection", e.target.value as OrgSettings["runtime_protection"])} aria-label="Runtime protection mode" className="setting-select">
+              <option value="off">Off</option>
+              <option value="monitor">Monitor</option>
+              <option value="enforce">Enforce</option>
+            </Select>
+          </li>
+          <li className="setting">
+            <div>
+              <div className="setting-title">Security alerts in Slack</div>
+              <p className="muted small">Uses the Slack destination from Notifications: risk elevated, review required, quarantined, containment completed and cleared. Off by default.</p>
+            </div>
+            <Toggle checked={form.security_alerts_enabled} onChange={(v) => set("security_alerts_enabled", v)} label="Security alerts enabled" disabled={!editable} />
+          </li>
+        </ul>
+        {form.runtime_protection === "enforce" && org.runtime_protection !== "enforce" && (
+          <Alert tone="warn" title="Enforce changes gateway decisions">Runtime risk will be able to turn allowed actions into reviews and quarantine agents or sessions automatically.</Alert>
+        )}
       </Card>
 
       <Card title="Human approval">

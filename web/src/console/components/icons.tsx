@@ -29,6 +29,12 @@ export const IconApprovals = (p: P) => (
     <path d="M3 14c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" />
   </svg>
 );
+export const IconSecurity = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M8 1.8 13.2 3.7v4c0 3.1-2.1 5.4-5.2 6.5C4.9 13.1 2.8 10.8 2.8 7.7v-4L8 1.8Z" />
+    <path d="M8 5v3.2M8 10.6h.01" />
+  </svg>
+);
 export const IconAudit = (p: P) => (
   <svg {...base(p)}>
     <path d="M3 3.5h10M3 8h10M3 12.5h6" />

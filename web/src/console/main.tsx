@@ -16,6 +16,7 @@ import { AgentDetailPage } from "./pages/AgentDetail";
 import { PoliciesPage } from "./pages/Policies";
 import { PolicyEditorPage } from "./pages/PolicyEditor";
 import { ApprovalsPage } from "./pages/Approvals";
+import { IncidentPage, SecurityPage } from "./pages/Security";
 import { AuditPage } from "./pages/Audit";
 import { IntegrationsPage } from "./pages/Integrations";
 import { BadgePage } from "./pages/Badge";
@@ -105,6 +106,8 @@ function AuthedApp() {
   else if (match("/app/policies/new", path)) page = <PolicyEditorPage id={null} />;
   else if ((params = match("/app/policies/:id", path))) page = <PolicyEditorPage key={params.id} id={params.id!} />;
   else if (match("/app/approvals", path)) page = <ApprovalsPage />;
+  else if (match("/app/security", path)) page = <SecurityPage />;
+  else if ((params = match("/app/security/incidents/:id", path))) page = <IncidentPage key={params.id} id={params.id!} />;
   else if (match("/app/audit", path)) page = <AuditPage />;
   else if (match("/app/integrations", path)) page = <IntegrationsPage />;
   else if (match("/app/badge", path)) page = <BadgePage />;

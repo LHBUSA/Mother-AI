@@ -125,7 +125,7 @@ export function describeFailure(err: unknown): FailureInfo {
 
 export type Decision = "allow" | "review" | "block";
 export type Role = "owner" | "admin" | "security" | "approver" | "viewer";
-export type Permission = "read" | "approve" | "manage_agents" | "manage_policies" | "manage_keys" | "manage_badge" | "manage_org" | "manage_members";
+export type Permission = "read" | "approve" | "manage_agents" | "manage_policies" | "manage_keys" | "manage_badge" | "manage_org" | "manage_members" | "manage_security";
 
 export interface SessionInfo {
   user: { id: string; display_name: string; email: string | null };

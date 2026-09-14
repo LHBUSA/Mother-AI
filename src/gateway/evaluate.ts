@@ -1,9 +1,13 @@
 // POST /v1/evaluate and POST /v1/mcp/evaluate — the policy decision point.
 //
-// Round trips to D1: one read batch (key + org, agent, policies, prior decision)
-// and one write batch (decision [+ approval] [+ key last_used_at]). The decision
-// is durably recorded BEFORE the response is returned; if evidence cannot be
-// written, the caller receives a block.
+// Round trips to D1: one read batch (key + org, agent, policies, prior decision), the runtime
+// read (correlation and risk state; skipped when runtime protection is off and the request carries
+// no correlation), and one write batch (decision [+ runtime evidence] [+ approval] [+ lease]
+// [+ key last_used_at]). The decision is durably recorded BEFORE the response is returned; if
+// evidence cannot be written, the caller receives a block.
+//
+// Runtime protection (src/runtime) never changes the policy engine. In monitor mode the effective
+// decision is the policy decision; in enforce mode it is the most restrictive of policy and runtime.
 
 import type { Env } from "../env";
 import { canonicalJson, newId, sha256Hex, timingSafeEqual } from "../lib/crypto";
@@ -12,7 +16,7 @@ import { redactString, redactValue } from "../lib/redact";
 import { addSeconds, iso } from "../lib/time";
 import { isUniqueViolation, parseJson, type AgentRow, type DecisionRow } from "../lib/db";
 import { assertKeyUsable, readBearerKey } from "./identity";
-import { normalizeEvaluateRequest, normalizeMcpRequest, type NormalizedRequest } from "./normalize";
+import { fingerprintInput, normalizeEvaluateRequest, normalizeMcpRequest, type NormalizedRequest } from "./normalize";
 import {
   ENGINE_VERSION,
   evaluateSafely,
@@ -22,6 +26,10 @@ import {
 } from "./policy-engine";
 import { approvalView, type ApprovalView } from "./approvals";
 import { notifyApprovalEvent } from "../notifications/approvals";
+import { RISK_ENGINE_VERSION, type RiskMode } from "../runtime/engine";
+import { assessEvaluation, correlationGate, loadRuntimeContext, runtimeWriteStatements, signalSummary, type RuntimeAssessment, type RuntimeContext } from "../runtime/gateway";
+import { replayContainment } from "../runtime/replay";
+import { afterRuntimeCommit } from "../runtime/alerts";
 
 export interface GatewayDeps {
   now: () => number;
@@ -41,6 +49,8 @@ interface KeyOrgRow {
   require_registered_agents: number;
   default_decision: "block" | "review";
   approval_ttl_seconds: number;
+  runtime_protection: RiskMode;
+  security_alerts_enabled: number;
 }
 
 interface PolicyQueryRow {
@@ -58,7 +68,8 @@ interface PolicyQueryRow {
   bound: number;
 }
 
-interface ExistingRow extends DecisionRow {
+export interface ExistingRow extends DecisionRow {
+  session_id: string | null;
   approval_id: string | null;
   approval_status: "pending" | "approved" | "denied" | "expired" | null;
   approval_expires_at: string | null;
@@ -83,8 +94,8 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
   const key = await readBearerKey(request);
   const body = await readJsonObject(request);
   const normalized: NormalizedRequest = kind === "mcp" ? normalizeMcpRequest(body) : normalizeEvaluateRequest(body);
-  const fingerprint = await sha256Hex(canonicalJson(normalized.action));
-  const { action } = normalized;
+  const fingerprint = await sha256Hex(canonicalJson(fingerprintInput(normalized)));
+  const { action, correlation } = normalized;
 
   const db = env.DB;
   const statements = [
@@ -92,7 +103,7 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
       .prepare(
         `SELECT k.id AS key_id, k.key_hash, k.environment AS key_environment, k.revoked_at, k.last_used_at,
                 o.id AS org_id, o.status AS org_status, o.gateway_enabled, o.audit_enabled,
-                o.require_registered_agents, o.default_decision, o.approval_ttl_seconds
+                o.require_registered_agents, o.default_decision, o.approval_ttl_seconds, o.runtime_protection, o.security_alerts_enabled
            FROM api_keys k JOIN organizations o ON o.id = k.organization_id
           WHERE k.key_hash = ?`,
       )
@@ -129,25 +140,71 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
   const keyRow = (results[0]!.results[0] as KeyOrgRow | undefined) ?? null;
   assertKeyUsable(keyRow, key.hash, timingSafeEqual);
   const principal = keyRow!;
+  const mode: RiskMode = principal.runtime_protection ?? "monitor";
 
   const keyLimit = await env.RL_GATEWAY_KEY.limit({ key: principal.key_id });
   if (!keyLimit.success) throw new ApiError(429, "RATE_LIMITED", "This API key exceeded its gateway rate limit.");
 
   const existing = normalized.requestId ? ((results[3]!.results[0] as ExistingRow | undefined) ?? null) : null;
   if (existing) {
-    return replay(existing, fingerprint, deps);
+    assertSameFingerprint(existing, fingerprint);
+    if (mode === "enforce") {
+      // A stale decision must never become an authorization token for a contained scope.
+      const blocked = await replayContainment(env, principal.org_id, principal.key_id, existing, deps.now());
+      if (blocked) return blocked;
+    }
+    return replay(existing, deps);
   }
 
   const agent = (results[1]!.results[0] as AgentRow | undefined) ?? null;
   const policyRows = results[2]!.results as unknown as PolicyQueryRow[];
+  const gate = identityGate(principal, agent, action.environment, action.agent);
+  const actionFacts = {
+    capability: action.capability,
+    operation: action.operation,
+    protocol: action.protocol,
+    destination: action.destination,
+    dataClass: action.data_class,
+    mcpTool: action.mcp_tool,
+  };
 
-  // ---- identity gates (recorded as decisions) ----------------------------
+  // ---- runtime context (correlation + risk state) ------------------------------------
+  let runtime: RuntimeContext | null = null;
+  if (mode !== "off" || correlation) {
+    try {
+      runtime = await loadRuntimeContext(db, {
+        mode,
+        alertsEnabled: principal.security_alerts_enabled === 1,
+        organizationId: principal.org_id,
+        apiKeyId: principal.key_id,
+        agentId: agent?.id ?? null,
+        agentKnownAsUnknown: gate?.reason_code === "AGENT_UNKNOWN",
+        correlation,
+        action: actionFacts,
+        nowMs: deps.now(),
+      });
+    } catch (err) {
+      if (mode === "enforce" || correlation) {
+        throw new ApiError(503, "RUNTIME_UNAVAILABLE", "Mother AI could not load runtime protection state; failing closed.");
+      }
+      // monitor mode never changes the decision; runtime evidence is skipped for this request.
+      console.error("runtime context unavailable (monitor)", err instanceof Error ? err.name : "unknown");
+      runtime = null;
+    }
+  }
+
+  const corrGate = correlationGate(runtime, correlation);
+  const validSessionId = runtime?.session === "valid" ? correlation!.sessionId : null;
+  const validParentId = runtime?.parent === "valid" ? correlation!.parentDecisionId : null;
+
+  // ---- identity + correlation gates, then policy --------------------------------------
   let result: EvaluationResult;
   let evalMs = 0;
   let environment = action.environment;
-  const gate = identityGate(principal, agent, action.environment, action.agent);
   if (gate) {
     result = gate;
+  } else if (corrGate) {
+    result = blockResult(corrGate.reasonCode, corrGate.reason);
   } else {
     if (agent) environment = agent.environment;
     const policies: PolicyRecord[] = policyRows.map((p) => ({
@@ -176,8 +233,31 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
     evalMs = performance.now() - t0;
   }
 
+  // ---- runtime risk (never modifies the policy result; may restrict in enforce mode) ---
+  let assessment: RuntimeAssessment | null = null;
+  if (runtime && mode !== "off") {
+    try {
+      assessment = assessEvaluation(runtime, {
+        policyDecision: result.decision,
+        gateReason: gate?.reason_code ?? corrGate?.reasonCode ?? null,
+        correlationSignal: corrGate?.signal ?? null,
+        action: actionFacts,
+        validSessionId,
+      });
+    } catch (err) {
+      if (mode === "enforce") throw new ApiError(503, "RUNTIME_UNAVAILABLE", "Mother AI could not assess runtime risk; failing closed.");
+      console.error("runtime assessment failed (monitor)", err instanceof Error ? err.name : "unknown");
+      assessment = null;
+    }
+  }
+  const effective = assessment ? assessment.effective : result.decision;
+  const containmentInForce = !!assessment && assessment.mode === "enforce" && assessment.runtimeDecision === "block";
+  const restricted = effective !== result.decision || (containmentInForce && !gate && !corrGate);
+  const reasonCode = restricted ? assessment!.riskReasonCode! : result.reason_code;
+  const reason = restricted ? assessment!.riskReason! : result.reason;
+
   // ---- durable evidence ---------------------------------------------------
-  const nowMs = deps.now();
+  const nowMs = runtime?.nowMs ?? deps.now();
   const now = iso(nowMs);
   const decisionId = newId("dec");
   const requestId = normalized.requestId ?? newId("req");
@@ -190,8 +270,8 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
         `INSERT INTO decisions (id, organization_id, request_id, request_fingerprint, api_key_id, agent_id, agent_key,
             protocol, capability, operation, resource, destination, data_class, environment, mcp_server, mcp_tool,
             decision, reason_code, reason, policy_id, policy_version, matched_policies, context, eval_ms, gateway_ms,
-            engine_version, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            engine_version, created_at, session_id, parent_decision_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         decisionId,
@@ -210,9 +290,9 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
         environment,
         action.mcp_server,
         action.mcp_tool,
-        result.decision,
-        result.reason_code,
-        result.reason,
+        effective,
+        reasonCode,
+        reason,
         result.policy?.id ?? null,
         result.policy?.version ?? null,
         JSON.stringify(result.matched),
@@ -221,21 +301,41 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
         round(gatewayMs),
         result.engine_version,
         now,
+        validSessionId,
+        validParentId,
       ),
   ];
 
+  let runtimeWrites = runtime
+    ? runtimeWriteStatements(db, runtime, assessment, {
+        decisionId,
+        requestId,
+        agent: agent ? { id: agent.id } : null,
+        validSessionId,
+        claimedSessionId: correlation?.sessionId && !validSessionId ? correlation.sessionId : null,
+        claimedParentId: correlation?.parentDecisionId && !validParentId ? correlation.parentDecisionId : null,
+        action: { ...actionFacts, resource: redactString(action.resource) },
+        policy: { id: result.policy?.id ?? null, version: result.policy?.version ?? null },
+        lease: correlation?.lease ?? null,
+        effective,
+      })
+    : null;
+  const decisionWrite = writes[0]!;
+  if (runtimeWrites) writes.push(...runtimeWrites.statements);
+  const coreWrites: D1PreparedStatement[] = [decisionWrite];
+
   let approval: ApprovalView | null = null;
-  if (result.decision === "review") {
+  if (effective === "review") {
     const approvalId = newId("apr");
     const expiresAt = addSeconds(now, principal.approval_ttl_seconds);
-    writes.push(
-      db
-        .prepare(
-          `INSERT INTO approvals (id, organization_id, decision_id, status, requested_at, expires_at)
-           VALUES (?, ?, ?, 'pending', ?, ?)`,
-        )
-        .bind(approvalId, principal.org_id, decisionId, now, expiresAt),
-    );
+    const approvalWrite = db
+      .prepare(
+        `INSERT INTO approvals (id, organization_id, decision_id, status, requested_at, expires_at)
+         VALUES (?, ?, ?, 'pending', ?, ?)`,
+      )
+      .bind(approvalId, principal.org_id, decisionId, now, expiresAt);
+    writes.push(approvalWrite);
+    coreWrites.push(approvalWrite);
     approval = approvalView(
       { id: approvalId, status: "pending", requested_at: now, expires_at: expiresAt, grant_expires_at: null, consumed_at: null },
       nowMs,
@@ -243,32 +343,55 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
   }
 
   if (!principal.last_used_at || nowMs - Date.parse(principal.last_used_at) > KEY_TOUCH_INTERVAL_MS) {
-    writes.push(db.prepare(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`).bind(now, principal.key_id));
+    const touch = db.prepare(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`).bind(now, principal.key_id);
+    writes.push(touch);
+    coreWrites.push(touch);
   }
 
   try {
-    await db.batch(writes);
+    try {
+      await db.batch(writes);
+    } catch (err) {
+      // monitor mode must never change the gateway decision: if runtime evidence cannot be written,
+      // record the decision without it (and without a lease). enforce mode fails closed below.
+      if (mode !== "monitor" || !runtimeWrites || isUniqueViolation(err) || correlation?.lease) throw err;
+      console.error("runtime evidence write failed (monitor); decision recorded without it", err instanceof Error ? err.name : "unknown");
+      await db.batch(coreWrites);
+      runtimeWrites = null;
+      assessment = null;
+    }
   } catch (err) {
     if (isUniqueViolation(err) && normalized.requestId) {
       // A concurrent retry with the same request_id won the insert. Return its decision.
       const [again] = await db.batch([existingDecisionStatement(db, key.hash, normalized.requestId)]);
       const row = (again!.results[0] as ExistingRow | undefined) ?? null;
-      if (row) return replay(row, fingerprint, deps);
+      if (row) {
+        assertSameFingerprint(row, fingerprint);
+        if (mode === "enforce") {
+          const blocked = await replayContainment(env, principal.org_id, principal.key_id, row, deps.now());
+          if (blocked) return blocked;
+        }
+        return replay(row, deps);
+      }
     }
     throw new ApiError(503, "AUDIT_WRITE_FAILED", "Mother AI could not record decision evidence; failing closed.");
   }
 
-  // Side effect only, after the decision and approval are durable. It runs in the
-  // background, never throws, and cannot change the response below.
+  // Side effects only, after the decision and approval are durable. They run in the
+  // background, never throw, and cannot change the response below.
   if (approval) deps.waitUntil(notifyApprovalEvent(env, principal.org_id, approval.approval_id, "review_required", deps.now));
+  if (runtimeWrites && (runtimeWrites.incidentId || runtimeWrites.alertsQueued)) {
+    deps.waitUntil(afterRuntimeCommit(env, principal.org_id, runtimeWrites.incidentId, deps.now));
+  }
 
+  const includeRuntime = mode === "enforce" || !!correlation;
   return json(
     {
       decision_id: decisionId,
       request_id: requestId,
-      decision: result.decision,
-      reason_code: result.reason_code,
-      reason: result.reason,
+      decision: effective,
+      reason_code: reasonCode,
+      reason,
       policy_id: result.policy?.id ?? null,
       policy_version: result.policy?.version ?? null,
       agent_id: action.agent,
@@ -278,13 +401,32 @@ export async function handleEvaluate(request: Request, env: Env, deps: GatewayDe
       evaluated_at: now,
       replayed: false,
       latency_ms: { policy: round(evalMs), gateway: round(gatewayMs) },
+      ...(includeRuntime
+        ? {
+            session_id: validSessionId,
+            parent_decision_id: validParentId,
+            risk: assessment
+              ? {
+                  mode: assessment.mode,
+                  engine_version: RISK_ENGINE_VERSION,
+                  policy_decision: assessment.policyDecision,
+                  runtime_risk_decision: assessment.runtimeDecision,
+                  effective_decision: effective,
+                  state: assessment.effectiveState,
+                  signals: signalSummary(assessment),
+                  incident_id: runtimeWrites?.incidentId ?? assessment.existingIncidentId,
+                }
+              : { mode, engine_version: RISK_ENGINE_VERSION, policy_decision: result.decision, runtime_risk_decision: "allow", effective_decision: effective, state: "normal", signals: [], incident_id: null },
+            ...(runtimeWrites?.leaseId ? { lease: { lease_id: runtimeWrites.leaseId, expires_at: runtimeWrites.leaseExpiresAt, max_uses: correlation!.lease!.maxUses } } : {}),
+          }
+        : {}),
     },
     200,
     { "Server-Timing": `policy;dur=${round(evalMs)}, gateway;dur=${round(gatewayMs)}` },
   );
 }
 
-function existingDecisionStatement(db: D1Database, keyHash: string, requestId: string): D1PreparedStatement {
+export function existingDecisionStatement(db: D1Database, keyHash: string, requestId: string): D1PreparedStatement {
   return db
     .prepare(
       `SELECT d.*, ap.id AS approval_id, ap.status AS approval_status, ap.expires_at AS approval_expires_at,
@@ -298,41 +440,36 @@ function existingDecisionStatement(db: D1Database, keyHash: string, requestId: s
     .bind(keyHash, requestId);
 }
 
+function blockResult(reason_code: string, reason: string): EvaluationResult {
+  return { decision: "block", reason_code, reason, policy: null, matched: [], evaluated_policies: 0, engine_version: ENGINE_VERSION };
+}
+
 function identityGate(
   principal: KeyOrgRow,
   agent: AgentRow | null,
   requestedEnvironment: string | null,
   agentKey: string,
 ): EvaluationResult | null {
-  const block = (reason_code: string, reason: string): EvaluationResult => ({
-    decision: "block",
-    reason_code,
-    reason,
-    policy: null,
-    matched: [],
-    evaluated_policies: 0,
-    engine_version: ENGINE_VERSION,
-  });
   if (!agent) {
     if (principal.require_registered_agents === 1) {
-      return block("AGENT_UNKNOWN", `Agent "${agentKey}" is not registered in this organization.`);
+      return blockResult("AGENT_UNKNOWN", `Agent "${agentKey}" is not registered in this organization.`);
     }
     return null;
   }
-  if (agent.status !== "active") return block("AGENT_DISABLED", `Agent "${agentKey}" is disabled.`);
+  if (agent.status !== "active") return blockResult("AGENT_DISABLED", `Agent "${agentKey}" is disabled.`);
   if (requestedEnvironment && requestedEnvironment !== agent.environment) {
-    return block(
+    return blockResult(
       "AGENT_ENVIRONMENT_MISMATCH",
       `Request declared environment "${requestedEnvironment}" but agent "${agentKey}" is registered for "${agent.environment}".`,
     );
   }
   if (principal.key_environment === "test" && agent.environment === "production") {
-    return block("API_KEY_ENVIRONMENT_MISMATCH", "Test API keys cannot evaluate actions for production agents.");
+    return blockResult("API_KEY_ENVIRONMENT_MISMATCH", "Test API keys cannot evaluate actions for production agents.");
   }
   return null;
 }
 
-function replay(existing: ExistingRow, fingerprint: string, deps: GatewayDeps): Response {
+function assertSameFingerprint(existing: ExistingRow, fingerprint: string): void {
   if (!timingSafeEqual(existing.request_fingerprint, fingerprint)) {
     throw new ApiError(
       409,
@@ -341,6 +478,9 @@ function replay(existing: ExistingRow, fingerprint: string, deps: GatewayDeps): 
       { decision_id: existing.id },
     );
   }
+}
+
+function replay(existing: ExistingRow, deps: GatewayDeps): Response {
   const nowMs = deps.now();
   const approval = existing.approval_id
     ? approvalView(

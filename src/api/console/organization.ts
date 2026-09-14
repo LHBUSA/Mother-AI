@@ -23,6 +23,8 @@ function presentOrg(o: OrganizationRow) {
     default_decision: o.default_decision,
     approval_ttl_seconds: o.approval_ttl_seconds,
     approval_grant_ttl_seconds: o.approval_grant_ttl_seconds,
+    runtime_protection: o.runtime_protection,
+    security_alerts_enabled: o.security_alerts_enabled === 1,
     created_at: o.created_at,
   };
 }
@@ -42,6 +44,8 @@ export async function updateSettings(ctx: ConsoleContext): Promise<Response> {
   const defaultDecision = v.oneOf("default_decision", ["block", "review"] as const, { optional: true }) ?? org.default_decision;
   const ttl = v.int("approval_ttl_seconds", { min: 60, max: 86400, optional: true }) ?? org.approval_ttl_seconds;
   const grantTtl = v.int("approval_grant_ttl_seconds", { min: 30, max: 86400, optional: true }) ?? org.approval_grant_ttl_seconds;
+  const runtimeProtection = v.oneOf("runtime_protection", ["off", "monitor", "enforce"] as const, { optional: true }) ?? org.runtime_protection;
+  const alerts = v.bool("security_alerts_enabled", { optional: true });
   v.assert();
 
   const next = {
@@ -52,6 +56,8 @@ export async function updateSettings(ctx: ConsoleContext): Promise<Response> {
     default_decision: defaultDecision,
     approval_ttl_seconds: ttl,
     approval_grant_ttl_seconds: grantTtl,
+    runtime_protection: runtimeProtection,
+    security_alerts_enabled: alerts === undefined ? org.security_alerts_enabled : alerts ? 1 : 0,
   };
   const changes: Record<string, { from: unknown; to: unknown }> = {};
   for (const [k, val] of Object.entries(next)) {
@@ -61,15 +67,22 @@ export async function updateSettings(ctx: ConsoleContext): Promise<Response> {
   if (!Object.keys(changes).length) return json({ organization: presentOrg(org) });
 
   const now = iso(ctx.nowMs);
-  await ctx.db.batch([
-    ctx.db
-      .prepare(
-        `UPDATE organizations SET display_name = ?, gateway_enabled = ?, audit_enabled = ?, require_registered_agents = ?, default_decision = ?,
-                approval_ttl_seconds = ?, approval_grant_ttl_seconds = ?, updated_at = ? WHERE id = ?`,
-      )
-      .bind(next.display_name, next.gateway_enabled, next.audit_enabled, next.require_registered_agents, next.default_decision, next.approval_ttl_seconds, next.approval_grant_ttl_seconds, now, ctx.orgId),
-    controlEventStatement(ctx.db, ctx.orgId, ctx.actor, "organization.settings_updated", { type: "organization", id: ctx.orgId }, { changes }, now),
-  ]);
+  try {
+    await ctx.db.batch([
+      ctx.db
+        .prepare(
+          `UPDATE organizations SET display_name = ?, gateway_enabled = ?, audit_enabled = ?, require_registered_agents = ?, default_decision = ?,
+                  approval_ttl_seconds = ?, approval_grant_ttl_seconds = ?, runtime_protection = ?, security_alerts_enabled = ?, updated_at = ? WHERE id = ?`,
+        )
+        .bind(next.display_name, next.gateway_enabled, next.audit_enabled, next.require_registered_agents, next.default_decision, next.approval_ttl_seconds, next.approval_grant_ttl_seconds, next.runtime_protection, next.security_alerts_enabled, now, ctx.orgId),
+      controlEventStatement(ctx.db, ctx.orgId, ctx.actor, "organization.settings_updated", { type: "organization", id: ctx.orgId }, { changes }, now),
+    ]);
+  } catch (err) {
+    if (err instanceof Error && /active quarantine/.test(err.message)) {
+      throw new ApiError(409, "ACTIVE_QUARANTINE", "Runtime protection cannot leave enforce while a quarantine is active. Clear the quarantine first.");
+    }
+    throw err;
+  }
   const updated = await ctx.db.prepare(`SELECT * FROM organizations WHERE id = ?`).bind(ctx.orgId).first<OrganizationRow>();
   return json({ organization: presentOrg(updated!) });
 }

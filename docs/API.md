@@ -250,6 +250,10 @@ An organization admin can connect one Slack incoming webhook in **Settings → N
 - Delivery status is literal: `QUEUED`, `SENDING`, `SENT_TO_PROVIDER` (Slack answered 200; not proof a person read it), `FAILED`, `SKIPPED` (for example the approval was no longer pending, the organization is not active, or Slack was disconnected). 429, 5xx, timeouts and network errors are retried — one short in-request retry, then the 10-minute cron — for at most 3 attempts. Other 4xx responses fail immediately.
 - A notification failure never changes a decision, an approval, its expiry or its grant.
 
+## Runtime containment
+
+Sessions, parent correlation, capability leases, integration-reported execution results and deterministic runtime risk are documented in [RUNTIME_SECURITY.md](RUNTIME_SECURITY.md). All are optional: requests that do not use them behave exactly as described above, and organizations default to `monitor` mode, which never changes a decision.
+
 ## MCP normalization
 
 MCP tool calls normalize into the same canonical action as direct API calls:

@@ -13,7 +13,8 @@ export type Permission =
   | "manage_keys"
   | "manage_badge"
   | "manage_org"
-  | "manage_members";
+  | "manage_members"
+  | "manage_security";
 
 const MINIMUM_ROLE: Record<Permission, Role> = {
   read: "viewer",
@@ -24,6 +25,7 @@ const MINIMUM_ROLE: Record<Permission, Role> = {
   manage_badge: "admin",
   manage_org: "admin",
   manage_members: "admin",
+  manage_security: "security",
 };
 
 export function can(role: Role, permission: Permission): boolean {

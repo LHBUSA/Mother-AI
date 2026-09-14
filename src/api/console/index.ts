@@ -14,6 +14,7 @@ import { getDecision, listControlEvents, listDecisions } from "./audit";
 import { createKey, listKeys, revokeKey } from "./keys";
 import { badgeAction, getBadge } from "./badge";
 import { configureSlack, getNotificationSettings, removeSlack, testSlack } from "./notifications";
+import { clearSecurityIncident, getIncident, getSecurityOverview, quarantineSubject } from "./security";
 import { createInvite, getSecurity, getSettings, listMembers, revokeInvite, revokeOtherSessions, updateMember, updateSettings } from "./organization";
 
 type Handler = (ctx: ConsoleContext) => Promise<Response>;
@@ -49,6 +50,11 @@ const ROUTES: Route[] = [
 
   ["GET", /^\/api\/console\/badge$/, "read", getBadge],
   ["POST", /^\/api\/console\/badge\/(enable|suspend|resume|rotate)$/, "manage_badge", badgeAction],
+
+  ["GET", /^\/api\/console\/security$/, "read", getSecurityOverview],
+  ["GET", new RegExp(`^/api/console/security/incidents/${ID("inc")}$`), "read", getIncident],
+  ["POST", /^\/api\/console\/security\/quarantine$/, "manage_security", quarantineSubject],
+  ["POST", new RegExp(`^/api/console/security/incidents/${ID("inc")}/clear$`), "manage_security", clearSecurityIncident],
 
   ["GET", /^\/api\/console\/notifications$/, "read", getNotificationSettings],
   ["POST", /^\/api\/console\/notifications\/slack$/, "manage_org", configureSlack],

@@ -236,6 +236,7 @@ const routes = [
   [`/app/policies/${reviewPolicy.id}`, "console-policy-editor"],
   ["/app/policies/new", "console-policy-new"],
   ["/app/approvals", "console-approvals"],
+  ["/app/security", "console-security"],
   ["/app/audit", "console-audit"],
   ["/app/integrations", "console-integrations"],
   ["/app/badge", "console-badge"],

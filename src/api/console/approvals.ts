@@ -4,6 +4,33 @@ import { actOnApproval, approvalView, sweepExpiredApprovals } from "../../gatewa
 import { Validator, assertOrgWritable, type ConsoleContext } from "./context";
 import { decisionSummary } from "./audit";
 import { notifyApprovalEvent } from "../../notifications/approvals";
+import { ApiError } from "../../lib/http";
+import { iso } from "../../lib/time";
+import { isContained } from "../../runtime/engine";
+import { scopeState } from "../../runtime/api";
+
+/** An approval inside a quarantined scope, or issued before its containment epoch, cannot be approved. */
+async function approvalScopeContained(ctx: ConsoleContext, approvalId: string): Promise<ApiError | null> {
+  const row = await ctx.db
+    .prepare(
+      `SELECT ap.requested_at, d.agent_id, d.session_id, d.api_key_id FROM approvals ap
+         JOIN decisions d ON d.id = ap.decision_id AND d.organization_id = ap.organization_id
+        WHERE ap.id = ? AND ap.organization_id = ?`,
+    )
+    .bind(approvalId, ctx.orgId)
+    .first<{ requested_at: string; agent_id: string | null; session_id: string | null; api_key_id: string | null }>();
+  if (!row) return null;
+  const scope = await scopeState(ctx.db, ctx.orgId, row.agent_id, row.session_id, row.api_key_id ?? "-", iso(ctx.nowMs));
+  if (scope.epoch && row.requested_at < scope.epoch) {
+    return new ApiError(409, "APPROVAL_INVALIDATED", "This request was made before its scope was contained and can no longer be approved.");
+  }
+  if (ctx.session.organization.runtime_protection === "enforce" && isContained(scope.worst.state)) {
+    return new ApiError(409, "SCOPE_QUARANTINED", "This agent or session is quarantined. Approvals cannot restore access; an authorized human must clear the incident first.", {
+      incident_id: scope.worst.incidentId,
+    });
+  }
+  return null;
+}
 
 type Joined = ApprovalRow & {
   d_id: string;
@@ -57,6 +84,7 @@ export async function listApprovals(ctx: ConsoleContext): Promise<Response> {
         policy: d.policy_id ? { id: d.policy_id, name: r.policy_name, effect: r.policy_effect, version: d.policy_version } : null,
         agent: { display_name: r.agent_display_name, environment: r.agent_environment },
         notification: r.notification_status ? { channel: "slack", status: r.notification_status, error: r.notification_error } : null,
+        termination: r.terminated_reason ? { reason: r.terminated_reason, incident_id: r.terminated_incident_id, by: "system" } : null,
       };
     }),
     counts: Object.fromEntries(counts.results.map((c) => [c.status, c.n])),
@@ -70,6 +98,10 @@ export async function actApproval(ctx: ConsoleContext): Promise<Response> {
   const v = new Validator(ctx.body);
   const note = v.string("note", { max: 500, optional: true });
   v.assert();
+  if (verb === "approve") {
+    const blocked = await approvalScopeContained(ctx, id);
+    if (blocked) throw blocked;
+  }
   const row = await actOnApproval(
     ctx.db,
     ctx.orgId,

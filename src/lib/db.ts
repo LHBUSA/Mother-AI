@@ -14,6 +14,8 @@ export interface OrganizationRow {
   default_decision: "block" | "review";
   approval_ttl_seconds: number;
   approval_grant_ttl_seconds: number;
+  runtime_protection: "off" | "monitor" | "enforce";
+  security_alerts_enabled: number;
   created_at: string;
   updated_at: string;
 }
@@ -108,6 +110,8 @@ export interface ApprovalRow {
   note: string | null;
   grant_expires_at: string | null;
   consumed_at: string | null;
+  terminated_reason?: string | null;
+  terminated_incident_id?: string | null;
 }
 
 export interface BadgeRow {
