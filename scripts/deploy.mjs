@@ -79,7 +79,8 @@ const version = /Current Version ID:\s*([0-9a-f-]+)/i.exec(out)?.[1] ?? "unknown
 // 6. Verify the live Worker serves this commit
 const site = JSON.parse(readFileSync(join(exportDir, "config", "site.json"), "utf8"));
 let verified = false;
-for (let attempt = 0; attempt < 10 && !verified; attempt++) {
+// New versions can take tens of seconds to reach every edge location; allow up to ~90 s.
+for (let attempt = 0; attempt < 45 && !verified; attempt++) {
   try {
     const res = await fetch(`${site.origin}/health`, { headers: { "Cache-Control": "no-cache" } });
     const body = await res.json();
