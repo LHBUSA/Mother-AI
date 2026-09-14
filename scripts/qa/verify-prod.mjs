@@ -14,10 +14,12 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { SoftwareAuthenticator } from "./authenticator.mjs";
-import { ROOT, SITE, parseArgs } from "../ops/lib.mjs";
+import { ROOT, SITE, parseArgs, query } from "../ops/lib.mjs";
 
 const args = parseArgs(process.argv.slice(2));
-const ORIGIN = args.origin && args.origin !== true ? args.origin : SITE.origin;
+const ORIGIN = args.origin && args.origin !== true ? args.origin : SITE.origin; // UI origin (WebAuthn RP, browser Origin)
+const API = args.api && args.api !== true ? args.api : SITE.apiOrigin; // Worker API host
+const isApiPath = (path) => /^\/(v1|api|badge|health|ready)(\/|$)/.test(path);
 const SECRETS = process.env.MOTHER_QA_SECRETS ?? "D:/Workers/secrets/mother-ai-qa.json";
 const OUT = join(ROOT, "qa-artifacts", new Date().toISOString().replace(/[:.]/g, "-"));
 mkdirSync(OUT, { recursive: true });
@@ -30,18 +32,21 @@ function redactSecrets(text) {
   return String(text).replace(/mai_(live|test)_[0-9A-Za-z]{32}([0-9A-Za-z]{8})/g, "mai_$1_…$2").replace(/(__Host-mai_session=)[^;\s"]+/g, "$1…");
 }
 
-async function http(label, path, { method, json, key, cookie, headers = {} } = {}) {
+async function http(label, path, { method, json, key, cookie, headers = {}, host } = {}) {
   const h = { ...headers };
+  const base = host ?? (isApiPath(path) ? API : ORIGIN);
   if (json !== undefined) h["Content-Type"] = "application/json";
   if (key) h.Authorization = `Bearer ${key}`;
   if (cookie) h.Cookie = cookie;
   const m = method ?? (json !== undefined ? "POST" : "GET");
   if (m !== "GET" && !("Origin" in h)) h.Origin = ORIGIN;
+  // Mirror what a browser on the UI origin sends to the API host.
+  if (h.Origin === ORIGIN && base === API && !("Sec-Fetch-Site" in h) && /^\/api\//.test(path)) h["Sec-Fetch-Site"] = "same-site";
   const started = performance.now();
   let res;
   for (let attempt = 1; ; attempt++) {
     try {
-      res = await fetch(`${ORIGIN}${path}`, { method: m, headers: h, body: json !== undefined ? JSON.stringify(json) : undefined, redirect: "manual" });
+      res = await fetch(`${base}${path}`, { method: m, headers: h, body: json !== undefined ? JSON.stringify(json) : undefined, redirect: "manual" });
       break;
     } catch (err) {
       // Transport errors only (e.g. ECONNRESET on the local network). HTTP responses are never retried.
@@ -60,7 +65,7 @@ async function http(label, path, { method, json, key, cookie, headers = {} } = {
   }
   const record = {
     label,
-    request: { method: m, path, headers: Object.fromEntries(Object.entries(h).map(([k, v]) => [k, k === "Authorization" ? redactSecrets(v) : k === "Cookie" ? "__Host-mai_session=…" : v])), body: json },
+    request: { method: m, url: `${base}${path}`, headers: Object.fromEntries(Object.entries(h).map(([k, v]) => [k, k === "Authorization" ? redactSecrets(v) : k === "Cookie" ? "__Host-mai_session=…" : v])), body: json },
     response: { status: res.status, ms, headers: Object.fromEntries([...res.headers].filter(([k]) => /^(content-type|cache-control|idempotent-replayed|server-timing|x-frame-options|content-security-policy|strict-transport-security|x-content-type-options|referrer-policy|cross-origin-resource-policy|access-control-allow-origin|etag|set-cookie|permissions-policy|cross-origin-opener-policy)$/i.test(k)).map(([k, v]) => [k, k === "set-cookie" ? redactSecrets(v) : v])), body: typeof body === "string" && body.length > 600 ? `${body.slice(0, 600)}…` : body },
   };
   evidence.push(record);
@@ -315,22 +320,30 @@ if (!badge.body.badge) badge = await http("ENABLE badge", "/api/console/badge/en
 if (badge.body.badge?.state === "suspended") badge = await http("RESUME badge", "/api/console/badge/resume", { cookie: cookieA, method: "POST" });
 const token = badge.body.badge.token;
 const svgActive = await http("BADGE svg active", `/badge/${token}.svg`);
-const verifyActive = await http("VERIFY page active", `/verify/${token}`);
-check("badge ACTIVE + verification page", badge.body.status === "active" && svgActive.text.includes("AI Controls Active") && verifyActive.text.includes("ACTIVE") && verifyActive.text.includes("Mother AI QA (internal)") && verifyActive.text.includes("not a certification"), `${ORIGIN}/verify/${token}`);
+const verifyPage = await http("VERIFY page (UI)", `/verify/${token}`);
+const verifyActive = await http("PUBLIC badge API active", `/api/public/badges/${token}`, { headers: { Origin: ORIGIN } });
+check(
+  "badge ACTIVE + verification data",
+  badge.body.status === "active" && svgActive.text.includes("AI Controls Active") && verifyPage.res.status === 200 && verifyPage.text.includes("/src/verify/") === false && verifyPage.text.includes("Mother AI verification") &&
+    verifyActive.body.status === "active" && verifyActive.body.organization?.display_name === "Mother AI QA (internal)" && String(verifyActive.body.disclaimer).includes("not a certification") &&
+    verifyActive.res.headers.get("access-control-allow-origin") === ORIGIN && verifyActive.res.headers.get("cache-control") === "no-store" && !/org_|bdg_|usr_|key_/.test(verifyActive.text) &&
+    badge.body.badge.svg_url === `${API}/badge/${token}.svg` && badge.body.badge.verify_url === `${ORIGIN}/verify/${token}`,
+  `${ORIGIN}/verify/${token}`,
+);
 check("badge SVG headers", svgActive.res.headers.get("content-type")?.includes("image/svg+xml") && svgActive.res.headers.get("cross-origin-resource-policy") === "cross-origin" && svgActive.res.headers.get("cache-control")?.includes("no-cache"));
 await http("SUSPEND badge", "/api/console/badge/suspend", { cookie: cookieA, method: "POST" });
 const svgSuspended = await http("BADGE svg suspended", `/badge/${token}.svg`);
-const verifySuspended = await http("VERIFY page suspended", `/verify/${token}`);
-check("suspended badge renders not-active immediately", svgSuspended.text.includes("Protection suspended") && !svgSuspended.text.includes("AI Controls Active") && verifySuspended.text.includes("SUSPENDED"));
+const verifySuspended = await http("PUBLIC badge API suspended", `/api/public/badges/${token}`);
+check("suspended badge renders not-active immediately", svgSuspended.text.includes("Protection suspended") && !svgSuspended.text.includes("AI Controls Active") && verifySuspended.body.status === "suspended");
 await http("RESUME badge", "/api/console/badge/resume", { cookie: cookieA, method: "POST" });
 const rotated = await http("ROTATE badge", "/api/console/badge/rotate", { cookie: cookieA, method: "POST" });
 const oldSvg = await http("BADGE old token after rotation", `/badge/${token}.svg`);
-const oldVerify = await http("VERIFY old token after rotation", `/verify/${token}`);
+const oldVerify = await http("PUBLIC badge API old token after rotation", `/api/public/badges/${token}`);
 const newSvg = await http("BADGE new token", `/badge/${rotated.body.badge.token}.svg?theme=light`);
-check("rotation revokes old token", oldSvg.text.includes("Badge revoked") && oldVerify.text.includes("REVOKED") && newSvg.text.includes("AI Controls Active"), `revoked ${token.slice(0, 6)}…, active ${ORIGIN}/verify/${rotated.body.badge.token}`);
+check("rotation revokes old token", oldSvg.text.includes("Badge revoked") && oldVerify.body.status === "revoked" && newSvg.text.includes("AI Controls Active"), `revoked ${token.slice(0, 6)}…, active ${ORIGIN}/verify/${rotated.body.badge.token}`);
 const invalidSvg = await http("BADGE invalid token", `/badge/${"0".repeat(32)}.svg`);
-const invalidVerify = await http("VERIFY invalid token", `/verify/${"0".repeat(32)}`);
-check("invalid badge token → 404 unverified", invalidSvg.res.status === 404 && invalidSvg.text.includes("Unverified badge") && invalidVerify.res.status === 404 && invalidVerify.text.includes("Verification not found"));
+const invalidVerify = await http("PUBLIC badge API invalid token", `/api/public/badges/${"0".repeat(32)}`);
+check("invalid badge token → 404 unverified", invalidSvg.res.status === 404 && invalidSvg.text.includes("Unverified badge") && invalidVerify.res.status === 404 && invalidVerify.body.error?.code === "BADGE_NOT_FOUND");
 const snippets = rotated.body.badge.snippets;
 
 // Headers / CORS
@@ -349,6 +362,121 @@ check("overview metrics from real events", overview.body.decisions_24h?.total > 
 const demo = await http("DEMO evaluate", "/api/demo/evaluate", { json: { agent_id: "billing-agent-prod", capability: "payments", operation: "refund", context: { amount: 4200 } } });
 check("public demo is stateless and real-engine", demo.body.demo === true && demo.body.stored === false && demo.body.decision === "review");
 
+// ---------------------------------------------------------------------------
+// Split-origin acceptance (UI on mother.proptechusa.ai, API on api.mother.proptechusa.ai)
+// ---------------------------------------------------------------------------
+
+// CORS matrix
+{
+  const pf = (label, path, origin, method = "POST") =>
+    http(`CORS preflight ${label}`, path, { method: "OPTIONS", headers: { Origin: origin, "Access-Control-Request-Method": method, "Access-Control-Request-Headers": "content-type" } });
+  const matrix = [];
+  for (const [path, cls, method] of [
+    ["/api/auth/login/options", "credentialed", "POST"],
+    ["/api/console/agents", "credentialed", "POST"],
+    ["/api/demo/evaluate", "public", "POST"],
+    ["/api/founding-access/token", "public", "GET"],
+    ["/api/founding-access", "public", "POST"],
+    ["/api/public/badges/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "public", "GET"],
+    ["/v1/evaluate", "none", "POST"],
+    ["/v1/mcp/evaluate", "none", "POST"],
+  ]) {
+    const ui = await pf(`${path} (UI)`, path, ORIGIN, method);
+    const evil = await pf(`${path} (evil)`, path, "https://evil.example", method);
+    const sibling = await pf(`${path} (sibling)`, path, "https://www.proptechusa.ai", method);
+    const acao = ui.res.headers.get("access-control-allow-origin");
+    const acac = ui.res.headers.get("access-control-allow-credentials");
+    const ok =
+      cls === "none"
+        ? !acao && !evil.res.headers.get("access-control-allow-origin")
+        : ui.res.status === 204 && acao === ORIGIN && (cls === "credentialed" ? acac === "true" : acac === null) && evil.res.status === 403 && !evil.res.headers.get("access-control-allow-origin") && sibling.res.status === 403;
+    matrix.push({ path, cls, ui: `${ui.res.status} ${acao ?? "-"} ${acac ?? "-"}`, evil: evil.res.status, sibling: sibling.res.status, ok });
+  }
+  console.table(matrix);
+  check("CORS matrix (credentialed / public / none)", matrix.every((m) => m.ok));
+}
+
+// CSRF variants on a real session
+{
+  const body = () => ({ agent_id: `csrf-${Math.random().toString(36).slice(2, 8)}`, display_name: "CSRF probe", environment: "staging" });
+  const sibling = await http("CSRF sibling subdomain", "/api/console/agents", { cookie: cookieA, json: body(), headers: { Origin: "https://www.proptechusa.ai", "Sec-Fetch-Site": "same-site" } });
+  const crossSite = await http("CSRF UI origin but cross-site fetch metadata", "/api/console/agents", { cookie: cookieA, json: body(), headers: { Origin: ORIGIN, "Sec-Fetch-Site": "cross-site" } });
+  const noOrigin = await http("CSRF missing Origin", "/api/console/agents", { cookie: cookieA, json: body(), headers: { Origin: "" } });
+  const apiOriginAsOrigin = await http("CSRF API host as Origin", "/api/console/agents", { cookie: cookieA, json: body(), headers: { Origin: API, "Sec-Fetch-Site": "same-origin" } });
+  check("CSRF: sibling subdomain, cross-site metadata, missing Origin and API-host Origin all rejected", [sibling, crossSite, noOrigin, apiOriginAsOrigin].every((r) => r.res.status === 403));
+  const legit = await http("same-site write from UI origin", "/api/console/settings", { cookie: cookieA, method: "PATCH", json: {}, headers: { Origin: ORIGIN, "Sec-Fetch-Site": "same-site" } });
+  check("same-site write from the UI origin accepted", legit.res.status === 200);
+}
+
+// Session cookie contract
+{
+  const opt = await http("cookie probe: login options", "/api/auth/login/options", { json: {} });
+  const chal = opt.setCookies.find((c) => c.startsWith("__Host-mai_chal=")) ?? "";
+  check(
+    "challenge + session cookies are host-only __Host-, Secure, HttpOnly, SameSite=Strict (API host)",
+    /Secure/.test(chal) && /HttpOnly/.test(chal) && /SameSite=Strict/.test(chal) && /Path=\//.test(chal) && !/Domain=/i.test(chal) && opt.res.headers.get("access-control-allow-credentials") === "true",
+  );
+}
+
+// Owner invite still inspects on the API (not redeemed, token never printed)
+{
+  const file = "D:/Workers/secrets/mother-ai-owner-invite.txt";
+  if (existsSync(file)) {
+    const line = readFileSync(file, "utf8").split(/\r?\n/).find((l) => l.startsWith("http"));
+    const token = new URLSearchParams(new URL(line.trim()).hash.slice(1)).get("token");
+    const res = await fetch(`${API}/api/auth/invite/inspect`, { method: "POST", headers: { "Content-Type": "application/json", Origin: ORIGIN, "Sec-Fetch-Site": "same-site" }, body: JSON.stringify({ token }) });
+    const body = await res.json();
+    evidence.push({ label: "OWNER invite inspect (token withheld)", response: { status: res.status, body } });
+    check("owner invite still valid for the UI host (inspected, not redeemed)", res.status === 200 && body.role === "owner" && Date.parse(body.expires_at) > Date.now() && new URL(line.trim()).origin === ORIGIN, `expires ${body.expires_at}`);
+  }
+}
+
+// Fresh QA passkey registered through the split origins (invite → register → sign in)
+if (args["fresh-passkey"]) {
+  const out = execFileSync(process.execPath, [join(ROOT, "scripts", "ops", "invite.mjs"), "--slug", "mother-ai-qa", "--name", "Mother AI QA", "--role", "owner", "--remote"], { cwd: ROOT, encoding: "utf8" });
+  const { invite_url } = JSON.parse(out.slice(out.indexOf("{")));
+  const inviteToken = new URL(invite_url).hash.replace("#token=", "");
+  const fresh = new SoftwareAuthenticator();
+  const opt = await http("fresh passkey: register options", "/api/auth/register/options", { json: { token: inviteToken } });
+  const credential = await fresh.register(opt.body, ORIGIN);
+  const verify = await http("fresh passkey: register verify", "/api/auth/register/verify", { json: { token: inviteToken, response: credential, device_name: "QA fresh passkey (split origin)" }, cookie: challengeCookie(opt.setCookies) });
+  const lopt = await http("fresh passkey: login options", "/api/auth/login/options", { json: {} });
+  const lverify = await http("fresh passkey: login verify", "/api/auth/login/verify", { json: { response: await fresh.authenticate(lopt.body, ORIGIN) }, cookie: challengeCookie(lopt.setCookies) });
+  const freshCookie = sessionCookie(lverify.setCookies);
+  const freshSession = await http("fresh passkey: session", "/api/auth/session", { cookie: freshCookie });
+  check("fresh passkey: registered via invite and signed in (RP mother.proptechusa.ai via API host)", opt.body.rp?.id === RP_ID && verify.res.status === 200 && lverify.res.status === 200 && freshSession.body.organization?.slug === "mother-ai-qa");
+  await http("fresh passkey: logout", "/api/auth/logout", { json: {}, cookie: freshCookie });
+  secrets.orgs["mother-ai-qa"].credentials = [...secrets.orgs["mother-ai-qa"].credentials, ...(await fresh.export())];
+  saveSecrets(secrets);
+}
+
+// Founding Access on the live API (real visitor IP reaches the Worker directly)
+{
+  const tokenRes = await http("FOUNDING token", "/api/founding-access/token", { headers: { Origin: ORIGIN } });
+  const formToken = tokenRes.body.form_token;
+  const valid = { name: "Mother AI QA", company: "Mother AI QA (internal)", work_email: `qa+founding-${runId}@localhomebuyersusa.com`, use_case: "Internal pre-cutover QA of Founding Access. Not a customer request.", agent_count: "1-5", uses_mcp: "evaluating", website: "", form_token: formToken };
+  const post = (label, b) => http(label, "/api/founding-access", { json: b, headers: { Origin: ORIGIN } });
+  const tooFast = await post("FOUNDING too fast", valid);
+  await new Promise((r) => setTimeout(r, 3500));
+  const invalid = await post("FOUNDING invalid fields", { ...valid, work_email: "nope", use_case: "short" });
+  const forged = await post("FOUNDING forged token", { ...valid, form_token: `${Date.now() - 10_000}.${"0".repeat(64)}` });
+  const honeypot = await post("FOUNDING honeypot", { ...valid, work_email: `qa+bot-${runId}@localhomebuyersusa.com`, website: "http://spam.example" });
+  const ok = await post("FOUNDING valid", valid);
+  const dupe = await post("FOUNDING duplicate within 24h", valid);
+  const rows = query(`SELECT work_email, length(ip_hash) AS ip_hash_len, ip_hash FROM founding_access_requests WHERE work_email LIKE 'qa+%${runId}@localhomebuyersusa.com'`, { remote: true });
+  const stored = rows.filter((r) => r.work_email === valid.work_email);
+  check(
+    "Founding Access: no Turnstile, too-fast/invalid/forged rejected, honeypot silent, valid stored once with hashed IP",
+    Object.keys(tokenRes.body).join(",") === "form_token" && tokenRes.res.headers.get("access-control-allow-origin") === ORIGIN &&
+      tooFast.res.status === 400 && tooFast.body.error.code === "FORM_TOO_FAST" &&
+      invalid.res.status === 400 && invalid.body.error.code === "INVALID_REQUEST" &&
+      forged.res.status === 400 && forged.body.error.code === "FORM_EXPIRED" &&
+      honeypot.res.status === 201 && ok.res.status === 201 && dupe.res.status === 201 &&
+      rows.length === 1 && stored.length === 1 && stored[0].ip_hash_len === 64 && /^[0-9a-f]{64}$/.test(stored[0].ip_hash),
+    `${rows.length} row(s)`,
+  );
+}
+
 // Optional: approval expiry (requires ~70 s)
 if (args["with-expiry"]) {
   await http("SET approval ttl 60s", "/api/console/settings", { cookie: cookieB, method: "PATCH", json: { approval_ttl_seconds: 60, default_decision: "review" } });
@@ -365,12 +493,33 @@ if (args["with-expiry"]) {
   await http("RESET approval ttl", "/api/console/settings", { cookie: cookieB, method: "PATCH", json: { approval_ttl_seconds: 900, default_decision: "block" } });
 }
 
+if (args["rate-limits"]) {
+  // Demo: 30/min per client IP. Sent directly to the API host, so the limiter keys on this machine's IP.
+  let demo429 = 0;
+  let demoOk = 0;
+  for (let i = 0; i < 40; i++) {
+    const r = await fetch(`${API}/api/demo/evaluate`, { method: "POST", headers: { "Content-Type": "application/json", Origin: ORIGIN }, body: JSON.stringify({ agent_id: "research-agent-prod", capability: "records", operation: "read" }) });
+    if (r.status === 429) demo429++;
+    else if (r.status === 200) demoOk++;
+    await r.arrayBuffer();
+  }
+  check("demo rate limit engages per visitor IP (30/min)", demo429 > 0 && demoOk >= 25, `${demoOk} ok, ${demo429} limited of 40`);
+  // Founding Access: 5/min per client IP (forged tokens: nothing is stored).
+  let form429 = 0;
+  for (let i = 0; i < 10; i++) {
+    const r = await fetch(`${API}/api/founding-access`, { method: "POST", headers: { "Content-Type": "application/json", Origin: ORIGIN }, body: JSON.stringify({ form_token: "x" }) });
+    if (r.status === 429) form429++;
+    await r.arrayBuffer();
+  }
+  check("Founding Access rate limit engages per visitor IP (5/min)", form429 > 0, `${form429} limited of 10`);
+}
+
 // Leave org A with one active live key for dashboards; revoke the per-run key from earlier runs is left to operators.
 secrets.orgs["mother-ai-qa"].live_key_id = live.id;
 secrets.orgs["mother-ai-qa"].live_key = live.secret;
 saveSecrets(secrets);
 
 writeFileSync(join(OUT, "evidence.json"), redactSecrets(JSON.stringify(evidence, null, 2)));
-writeFileSync(join(OUT, "results.json"), JSON.stringify({ origin: ORIGIN, commit: health.body.commit, results, badge: { verify_url: `${ORIGIN}/verify/${rotated.body.badge.token}`, revoked_verify_url: `${ORIGIN}/verify/${token}`, snippets } }, null, 2));
+writeFileSync(join(OUT, "results.json"), JSON.stringify({ origin: ORIGIN, api: API, commit: health.body.commit, results, badge: { verify_url: `${ORIGIN}/verify/${rotated.body.badge.token}`, revoked_verify_url: `${ORIGIN}/verify/${token}`, snippets } }, null, 2));
 console.log(`\n${results.length - failures}/${results.length} checks passed. Evidence: ${OUT}`);
 process.exit(failures ? 1 : 0);

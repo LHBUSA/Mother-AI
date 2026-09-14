@@ -32,7 +32,10 @@ export function initFoundingAccess(): void {
     tokenPromise = (async () => {
       try {
         const res = await fetch(apiUrl("/api/founding-access/token"), { credentials: "omit", headers: { Accept: "application/json" } });
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok) {
+        await res.text().catch(() => undefined); // drain so the request completes
+        throw new Error(String(res.status));
+      }
         const data = (await res.json()) as { form_token?: string };
         formToken = data.form_token ?? null;
       } catch {

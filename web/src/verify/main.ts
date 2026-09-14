@@ -107,10 +107,12 @@ async function main(): Promise<void> {
   }
   try {
     const res = await fetch(apiUrl(`/api/public/badges/${match[1]}`), { credentials: "omit", cache: "no-store", headers: { Accept: "application/json" } });
+    // Always drain the body, including on 404/429, so the request completes.
+    const text = await res.text();
     if (res.status === 404) return setState("invalid");
     if (res.status === 429) return setState("limited");
     if (!res.ok) return setState("error");
-    const data = (await res.json()) as PublicBadge;
+    const data = JSON.parse(text) as PublicBadge;
     if (!data || !(data.status in COPY) || !data.organization) return setState("error");
     render(data);
   } catch {

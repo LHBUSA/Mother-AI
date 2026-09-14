@@ -17,6 +17,7 @@ import { ROOT, SITE, parseArgs } from "../ops/lib.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const ORIGIN = args.origin && args.origin !== true ? args.origin : SITE.origin;
+const API = args.api && args.api !== true ? args.api : SITE.apiOrigin;
 const SECRETS = process.env.MOTHER_QA_SECRETS ?? "D:/Workers/secrets/mother-ai-qa.json";
 const PUPPETEER = process.env.PUPPETEER_CORE ?? "D:/Workers/ufc-tuf-scout-2026-09-12/qa/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js";
 const CHROME = process.env.CHROME ?? "C:/Program Files/Google/Chrome/Application/chrome.exe";
@@ -35,7 +36,7 @@ const check = (name, ok, detail = "") => {
 };
 
 async function gateway(path, body, key = qa.live_key) {
-  const res = await fetch(`${ORIGIN}${path}`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(`${API}${path}`, { method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   return { status: res.status, body: await res.json() };
 }
 
@@ -65,6 +66,11 @@ page.on("console", (m) => {
 });
 page.on("pageerror", (e) => consoleErrors.push({ url: page.url(), text: String(e) }));
 page.on("requestfailed", (r) => failedRequests.push({ url: r.url(), error: r.failure()?.errorText }));
+const apiRequests = [];
+page.on("request", (r) => {
+  const u = new URL(r.url());
+  if (/^\/(api|v1)\//.test(u.pathname)) apiRequests.push({ origin: u.origin, path: u.pathname, method: r.method() });
+});
 page.on("response", (r) => {
   if (r.status() >= 400 && !expected4xx.has(new URL(r.url()).pathname)) failedRequests.push({ url: r.url(), status: r.status() });
 });
@@ -143,9 +149,19 @@ const results = JSON.parse(readFileSync(join(ROOT, "qa-artifacts", apiRuns[apiRu
 for (const width of [1440, 390]) {
   await visit("/", "home", width);
   await visit("/app/login", "login", width);
-  await visit(`/verify/${results.badge.verify_url.split("/verify/")[1]}`, "verify-active", width);
-  await visit(`/verify/${results.badge.revoked_verify_url.split("/verify/")[1]}`, "verify-revoked", width);
-  await visit(`/verify/${"0".repeat(32)}`, "verify-invalid", width, { expect4xx: [`/verify/${"0".repeat(32)}`, "/badge/" + "0".repeat(32) + ".svg"] });
+  const activeToken = results.badge.verify_url.split("/verify/")[1];
+  const revokedToken = results.badge.revoked_verify_url.split("/verify/")[1];
+  await visit(`/verify/${activeToken}`, "verify-active", width);
+  const activeText = await page.evaluate(() => document.getElementById("verify")?.textContent ?? "");
+  const badgeImg = await page.evaluate(() => {
+    const img = document.querySelector("[data-badge-img]");
+    return img ? { src: img.getAttribute("src"), loaded: img.complete && img.naturalWidth > 0 } : null;
+  });
+  check(`verify page ACTIVE renders from the API @${width}`, /ACTIVE/.test(activeText) && /Mother AI Protected/.test(activeText) && /Mother AI QA \(internal\)/.test(activeText) && /not a certification/.test(activeText) && badgeImg?.src === `${API}/badge/${activeToken}.svg` && badgeImg.loaded, JSON.stringify(badgeImg));
+  await visit(`/verify/${revokedToken}`, "verify-revoked", width);
+  check(`verify page REVOKED @${width}`, /REVOKED/.test(await page.evaluate(() => document.getElementById("verify")?.textContent ?? "")));
+  await visit(`/verify/${"0".repeat(32)}`, "verify-invalid", width, { expect4xx: [`/api/public/badges/${"0".repeat(32)}`] });
+  check(`verify page unknown token shows not verified @${width}`, /Verification not found/.test(await page.evaluate(() => document.getElementById("verify")?.textContent ?? "")));
   await visit("/does-not-exist", "not-found", width, { expect4xx: ["/does-not-exist"] });
 }
 
@@ -184,6 +200,18 @@ await clickText("Sign in with passkey");
 await page.waitForFunction(() => location.pathname === "/app/", { timeout: 20_000 });
 await settle();
 check("passkey sign-in in Chrome lands on /app/", page.url() === `${ORIGIN}/app/`);
+{
+  const { cookies } = await cdp.send("Network.getAllCookies");
+  const session = cookies.filter((c) => c.name === "__Host-mai_session");
+  const apiHost = new URL(API).hostname;
+  check(
+    "real browser: session cookie is host-only on the API host, Secure, HttpOnly, SameSite=Strict; none on the UI host",
+    session.length === 1 && session[0].domain === apiHost && session[0].secure && session[0].httpOnly && session[0].sameSite === "Strict" && session[0].path === "/",
+    JSON.stringify(session.map((c) => ({ domain: c.domain, sameSite: c.sameSite, secure: c.secure, httpOnly: c.httpOnly }))),
+  );
+  const readable = await page.evaluate(() => document.cookie);
+  check("real browser: UI cannot read the session cookie", !readable.includes("mai_session"));
+}
 
 // ---- Console pages ----------------------------------------------------------------
 const agents = await page.evaluate(async () => (await (await fetch("/api/console/agents")).json()).agents);
@@ -265,6 +293,33 @@ await new Promise((r) => setTimeout(r, 1500));
 await shot("console-key-revoked", 1440);
 const afterRevoke = await gateway("/v1/evaluate", { agent_id: "research-agent-prod", capability: "knowledge", operation: "read" }, secret);
 check("UI-created key works, then UI revoke blocks it", beforeRevoke.body.decision === "allow" && afterRevoke.status === 401 && afterRevoke.body.error?.code === "API_KEY_REVOKED");
+
+// Founding Access form submitted from the real browser directly to the API host
+{
+  await page.setViewport({ width: 1440, height: 900 });
+  await page.goto(`${ORIGIN}/#founding-access`, { waitUntil: "networkidle0" });
+  await settle();
+  await page.evaluate(() => document.querySelector("#founding-access")?.scrollIntoView());
+  const email = `qa+founding-ui-${run}@localhomebuyersusa.com`;
+  await page.type('[data-fa-form] [name="name"]', "Mother AI QA");
+  await page.type('[data-fa-form] [name="company"]', "Mother AI QA (internal)");
+  await page.type('[data-fa-form] [name="work_email"]', email);
+  await page.type('[data-fa-form] [name="use_case"]', "Internal browser QA of Founding Access before the Vercel cutover.");
+  await page.select('[data-fa-form] [name="agent_count"]', "1-5");
+  await page.select('[data-fa-form] [name="uses_mcp"]', "evaluating");
+  await new Promise((r) => setTimeout(r, 4000)); // minimum submit time is enforced server-side
+  await page.click("[data-fa-submit]");
+  await page.waitForFunction(() => { const d = document.querySelector("[data-fa-done]"); return d && !d.hidden; }, { timeout: 15_000 }).catch(() => {});
+  const done = await page.evaluate(() => { const d = document.querySelector("[data-fa-done]"); return !!d && !d.hidden; });
+  await shot("founding-access-submitted", 1440);
+  check("Founding Access form submits from the browser to the API host", done && apiRequests.some((r) => r.origin === API && r.path === "/api/founding-access" && r.method === "POST"));
+}
+
+// No API traffic was proxied through the UI host
+{
+  const viaUi = apiRequests.filter((r) => r.origin !== API);
+  check("all browser API calls go directly to the API host (none via the UI host)", apiRequests.length > 20 && viaUi.length === 0, `${apiRequests.length} API calls, ${viaUi.length} via UI host`);
+}
 
 // Persist the authenticator counter so API QA keeps working.
 const { credentials } = await cdp.send("WebAuthn.getCredentials", { authenticatorId });

@@ -285,7 +285,10 @@ export function initDemo(): void {
   const loadWorkspace = async () => {
     try {
       const res = await fetch(apiUrl("/api/demo/workspace"), { credentials: "omit", headers: { Accept: "application/json" } });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        await res.text().catch(() => undefined); // drain so the request completes
+        throw new Error(String(res.status));
+      }
       const data = (await res.json()) as Workspace;
       const agents = Array.isArray(data.agents) ? data.agents : [];
       const scenarios = Array.isArray(data.scenarios) ? data.scenarios : [];
