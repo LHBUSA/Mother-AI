@@ -738,7 +738,7 @@ function NotificationsTab() {
         <p className="muted small mt-12">
           When a policy returns <Mono>review</Mono>, Mother posts one message with the agent, action, resource, policy, reason code, approval and decision ids, and the expiry — never the request context. Once that message is sent, Mother also posts when the request is approved, denied, expires, or its one-time grant is consumed. Approved does not mean executed.
         </p>
-        <p className="muted small">Delivery problems never change a decision or an approval. Failed sends are retried at most {3} times in total.</p>
+        <p className="muted small">Delivery problems never change a decision or an approval. Slack rate limits, server errors and timeouts are retried, for at most 3 attempts in total; other rejections are not retried.</p>
         {!data.available && <Alert tone="warn">Approval notifications are not available on this deployment yet.</Alert>}
       </Card>
 

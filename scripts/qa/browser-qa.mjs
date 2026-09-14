@@ -142,7 +142,7 @@ async function clickText(text, { selector = "button", last = false } = {}) {
 }
 
 // Badge tokens come from the most recent API verification run (scripts/qa/verify-prod.mjs).
-const apiRuns = readdirSync(join(ROOT, "qa-artifacts")).filter((d) => !d.startsWith("browser-") && existsSync(join(ROOT, "qa-artifacts", d, "results.json"))).sort();
+const apiRuns = readdirSync(join(ROOT, "qa-artifacts")).filter((d) => /^\d{4}-\d{2}-\d{2}T/.test(d) && existsSync(join(ROOT, "qa-artifacts", d, "results.json"))).sort();
 const results = JSON.parse(readFileSync(join(ROOT, "qa-artifacts", apiRuns[apiRuns.length - 1], "results.json"), "utf8"));
 
 // ---- Public pages -----------------------------------------------------------
