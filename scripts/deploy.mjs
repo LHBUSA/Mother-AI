@@ -79,7 +79,7 @@ const version = /Current Version ID:\s*([0-9a-f-]+)/i.exec(out)?.[1] ?? "unknown
 // 6. Verify the live Worker serves this commit
 const site = JSON.parse(readFileSync(join(exportDir, "config", "site.json"), "utf8"));
 // New versions can take tens of seconds to reach every edge location; allow up to ~90 s per host.
-for (const origin of [site.origin, ...(site.fallbackOrigins ?? [])]) {
+for (const origin of [...new Set([site.origin, site.apiOrigin, ...(site.fallbackOrigins ?? [])])]) {
   let verified = false;
   for (let attempt = 0; attempt < 45 && !verified; attempt++) {
     try {

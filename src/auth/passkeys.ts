@@ -19,7 +19,7 @@ import { controlEventStatement } from "../gateway/audit";
 import {
   CHALLENGE_COOKIE,
   SESSION_COOKIE,
-  assertSameOrigin,
+  assertBrowserOrigin,
   clearCookieHeader,
   cookieHeader,
   createSession,
@@ -27,6 +27,7 @@ import {
   readCookie,
 } from "./sessions";
 import { permissionsFor, type Role } from "./rbac";
+import { RP_ID, UI_ORIGIN, allowedBrowserOrigins } from "../lib/site";
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 const INVITE_TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -36,17 +37,19 @@ interface RelyingParty {
   origin: string;
 }
 
+/**
+ * The WebAuthn relying party is the UI origin (config/site.json "origin"), not the host
+ * that receives this API request. In production the only accepted browser origin is
+ * https://mother.proptechusa.ai with RP ID mother.proptechusa.ai.
+ */
 function relyingParty(request: Request, env: Env): RelyingParty {
-  const url = new URL(request.url);
-  const allowed = new Set([site.origin]);
-  if (env.ENVIRONMENT !== "production") {
-    allowed.add("http://localhost:8787");
-    allowed.add("http://127.0.0.1:8787");
+  const origin = request.headers.get("Origin");
+  if (!origin || !allowedBrowserOrigins(env.ENVIRONMENT).includes(origin)) {
+    throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "Passkey sign-in is only available on the Mother AI site.");
   }
-  if (!allowed.has(url.origin)) {
-    throw new ApiError(403, "ORIGIN_NOT_ALLOWED", "Passkey sign-in is only available on the canonical Mother AI origin.");
-  }
-  return { rpID: url.hostname, origin: url.origin };
+  if (origin === UI_ORIGIN) return { rpID: RP_ID, origin: UI_ORIGIN };
+  // Local development only (allowedBrowserOrigins excludes these in production).
+  return { rpID: new URL(origin).hostname, origin };
 }
 
 interface InviteRow {
@@ -152,7 +155,7 @@ export async function routeAuth(request: Request, env: Env, nowMs: number): Prom
   }
 
   if (request.method !== "POST") return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Use POST." } }, 405);
-  assertSameOrigin(request);
+  assertBrowserOrigin(request, env.ENVIRONMENT);
   await rateLimitAuth(request, env);
 
   if (path === "/api/auth/logout") {

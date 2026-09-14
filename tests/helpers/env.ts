@@ -8,6 +8,7 @@ import type { Role } from "../../src/auth/rbac";
 
 export const ORIGIN = site.origin;
 export const FALLBACK_ORIGIN = site.fallbackOrigins[0]!;
+export const API_ORIGIN = site.apiOrigin;
 
 export class ToggleLimiter implements RateLimiter {
   blocked = false;

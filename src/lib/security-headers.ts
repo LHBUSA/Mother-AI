@@ -1,13 +1,14 @@
+import { API_ORIGIN } from "./site";
+
 // Response hardening applied to every response the Worker returns.
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' https://challenges.cloudflare.com",
+  "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  `img-src 'self' data: ${API_ORIGIN}`,
   "font-src 'self'",
-  "connect-src 'self'",
-  "frame-src https://challenges.cloudflare.com",
+  `connect-src 'self' ${API_ORIGIN}`,
   "frame-ancestors 'none'",
   "base-uri 'none'",
   "form-action 'self'",
@@ -28,7 +29,6 @@ export function withSecurityHeaders(response: Response, opts: { publicEmbed?: bo
     if (!h.has("Content-Security-Policy")) h.set("Content-Security-Policy", CSP);
     if (!h.has("Cross-Origin-Resource-Policy")) h.set("Cross-Origin-Resource-Policy", "same-origin");
   }
-  h.delete("Access-Control-Allow-Origin");
   // Zone-level edge features (e.g. Web Analytics auto-injection on the proptechusa.ai zone)
   // must never rewrite Mother AI pages or inject third-party scripts into the console,
   // invite or verification flows. Cloudflare skips response modification on no-transform.

@@ -3,7 +3,7 @@
 
 import type { Env } from "../../env";
 import { ApiError, clientIp, json, readJsonObject } from "../../lib/http";
-import { assertSameOrigin, loadSession } from "../../auth/sessions";
+import { assertBrowserOrigin, loadSession } from "../../auth/sessions";
 import { requirePermission, type Permission } from "../../auth/rbac";
 import type { ConsoleContext } from "./context";
 import { overview } from "./overview";
@@ -70,7 +70,7 @@ export async function routeConsole(request: Request, env: Env, nowMs: number, wa
   }
 
   const mutating = request.method !== "GET";
-  if (mutating) assertSameOrigin(request);
+  if (mutating) assertBrowserOrigin(request, env.ENVIRONMENT);
 
   const session = await loadSession(request, env, nowMs);
   if (!session) throw new ApiError(401, "UNAUTHENTICATED", "Sign in required.");

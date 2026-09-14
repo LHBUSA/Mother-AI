@@ -2,11 +2,11 @@
 // cutover is a single config change.
 
 import site from "../../config/site.json";
-import { isFallbackOrigin } from "./site";
+import { isApiOnlyOrigin } from "./site";
 
 export function robotsTxt(url: URL): Response {
-  // Fallback hosts serve machine traffic only; keep them out of search indexes.
-  const body = isFallbackOrigin(url)
+  // The API host and fallbacks serve machine traffic only; keep them out of search indexes.
+  const body = isApiOnlyOrigin(url)
     ? "User-agent: *\nDisallow: /\n"
     : `User-agent: *\nAllow: /\nDisallow: /app/\nDisallow: /api/\nDisallow: /v1/\nDisallow: /verify/\n\nSitemap: ${site.origin}/sitemap.xml\n`;
   return new Response(body, { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" } });

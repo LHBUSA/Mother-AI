@@ -1,4 +1,3 @@
-import site from "../../../config/site.json";
 import { newId, randomBase62 } from "../../lib/crypto";
 import { ApiError, json } from "../../lib/http";
 import { iso } from "../../lib/time";
@@ -51,8 +50,8 @@ export async function getBadge(ctx: ConsoleContext): Promise<Response> {
           created_at: badge.created_at,
           activated_at: badge.activated_at,
           suspended_at: badge.suspended_at,
-          ...badgeUrls(site.origin, badge.public_token),
-          snippets: badgeSnippets(site.origin, badge.public_token),
+          ...badgeUrls(badge.public_token),
+          snippets: badgeSnippets(badge.public_token),
         }
       : null,
     revoked_badges: revoked.results,

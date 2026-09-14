@@ -2,9 +2,15 @@ import type { Env } from "../env";
 import { clientIp } from "../lib/http";
 import type { BadgeRow, OrganizationRow } from "../lib/db";
 import { iso } from "../lib/time";
+import { ENGINE_VERSION } from "../gateway/policy-engine";
+import { json } from "../lib/http";
+import { SERVICE_VERSION } from "../version";
 import {
+  BADGE_DISCLAIMER,
   BADGE_TOKEN,
+  badgeControls,
   badgeCriteria,
+  badgeUrls,
   badgeFactsStatement,
   computeBadgeStatus,
   markActivatedStatement,
@@ -79,4 +85,38 @@ export async function handleVerifyPage(request: Request, env: Env, token: string
     token,
   });
   return new Response(html, { status: 200, headers });
+}
+
+/**
+ * GET /api/public/badges/{token} — read-only verification data for the UI's /verify page.
+ * Public, rate limited per client IP, never cached, and limited to what the verification
+ * page shows: no internal ids, no token-to-org mapping beyond the display name.
+ */
+export async function handlePublicBadge(request: Request, env: Env, token: string, nowMs: number, ctx: ExecutionContext): Promise<Response> {
+  const headers = { "Cache-Control": "no-store" };
+  if (await limited(request, env)) {
+    return json({ error: { code: "RATE_LIMITED", message: "Too many verification requests. Try again in a minute." } }, 429, headers);
+  }
+  const found = await lookupBadge(env, token, nowMs, ctx);
+  if (!found) {
+    return json({ error: { code: "BADGE_NOT_FOUND", message: "This link does not match any Mother AI badge." } }, 404, headers);
+  }
+  const criteria = badgeCriteria(found.org, found.facts);
+  const dateOnly = (value: string | null) => (value ? value.slice(0, 10) : null);
+  return json(
+    {
+      status: found.status,
+      organization: { display_name: found.org.display_name },
+      controls: found.status === "revoked" ? [] : badgeControls(criteria),
+      checked_at: iso(nowMs),
+      activated_on: dateOnly(found.badge.activated_at),
+      last_gateway_activity_on: dateOnly(found.facts.last_activity),
+      policy_engine: ENGINE_VERSION,
+      service_version: SERVICE_VERSION,
+      badge: badgeUrls(token),
+      disclaimer: BADGE_DISCLAIMER,
+    },
+    200,
+    headers,
+  );
 }

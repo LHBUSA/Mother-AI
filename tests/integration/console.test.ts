@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { SoftwareAuthenticator } from "../../scripts/qa/authenticator.mjs";
-import { call, createEnv, ORIGIN, seedAgent, seedKey, seedOrg, seedPolicy, seedSession, type TestEnv } from "../helpers/env";
+import { API_ORIGIN, call, createEnv, ORIGIN, seedAgent, seedKey, seedOrg, seedPolicy, seedSession, type TestEnv } from "../helpers/env";
 import { newId, sha256Hex, generateToken } from "../../src/lib/crypto";
 
 function cookiesFrom(res: Response, jar: Map<string, string>) {
@@ -338,7 +338,7 @@ describe("badge", () => {
     await seedKey(env, orgId, "live");
     const active = (await (await call(env, "/api/console/badge", { cookie: owner.cookie })).json()) as { status: string; badge: { snippets: { markdown: string; html: string } } };
     expect(active.status).toBe("active");
-    expect(active.badge.snippets.markdown).toBe(`[![Mother AI Protected — AI Controls Active](${ORIGIN}/badge/${token}.svg)](${ORIGIN}/verify/${token})`);
+    expect(active.badge.snippets.markdown).toBe(`[![Mother AI Protected — AI Controls Active](${API_ORIGIN}/badge/${token}.svg)](${ORIGIN}/verify/${token})`);
     expect(active.badge.snippets.html).toContain(`href="${ORIGIN}/verify/${token}"`);
 
     const svg = await call(env, `/badge/${token}.svg?theme=light`);

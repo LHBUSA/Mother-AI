@@ -9,7 +9,6 @@ import { evaluateSafely, ENGINE_VERSION } from "../gateway/policy-engine";
 import { normalizeEvaluateRequest } from "../gateway/normalize";
 import { DEMO_AGENTS, DEMO_POLICIES, DEMO_SCENARIOS } from "../demo/workspace";
 import { SERVICE_NAME, SERVICE_VERSION } from "../version";
-import { CANONICAL_ORIGIN } from "../lib/site";
 
 // ---------------------------------------------------------------------------
 // Demo
@@ -101,24 +100,11 @@ const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-
 const AGENT_COUNTS = ["1-5", "6-25", "26-100", "100+", "unknown"];
 const MCP_USAGE = ["yes", "no", "evaluating"];
 
-/**
- * Turnstile is enforced when both keys are configured (Worker secrets). Exactly one
- * configured is a misconfiguration and fails closed rather than silently skipping it.
- */
-function turnstileMode(env: Env): "enforced" | "not_configured" {
-  const site = !!env.TURNSTILE_SITE_KEY;
-  const secret = !!env.TURNSTILE_SECRET_KEY;
-  if (site && secret) return "enforced";
-  if (!site && !secret) return "not_configured";
-  throw new ApiError(503, "FORMS_UNAVAILABLE", "Founding Access is temporarily unavailable.");
-}
-
 export async function foundingAccessToken(env: Env, nowMs: number): Promise<Response> {
   if (!env.FORM_SIGNING_KEY) throw new ApiError(503, "FORMS_UNAVAILABLE", "Founding Access is temporarily unavailable.");
-  turnstileMode(env);
   const issued = String(nowMs);
   const token = `${issued}.${await hmacSha256Hex(env.FORM_SIGNING_KEY, `founding-access:${issued}`)}`;
-  return json({ form_token: token, turnstile_site_key: env.TURNSTILE_SITE_KEY || null });
+  return json({ form_token: token });
 }
 
 async function verifyFormToken(env: Env, token: unknown, nowMs: number): Promise<void> {
@@ -132,32 +118,6 @@ async function verifyFormToken(env: Env, token: unknown, nowMs: number): Promise
     throw new ApiError(400, "FORM_EXPIRED", "This form expired. Reload the page and try again.");
   }
   if (age < FORM_MIN_AGE_MS) throw new ApiError(400, "FORM_TOO_FAST", "Please take a moment to complete the form.");
-}
-
-async function verifyTurnstile(env: Env, token: unknown, ip: string): Promise<"verified" | "not_configured"> {
-  if (turnstileMode(env) === "not_configured") return "not_configured";
-  if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
-    throw new ApiError(403, "VERIFICATION_FAILED", "Human verification is required.");
-  }
-  const form = new FormData();
-  form.append("secret", env.TURNSTILE_SECRET_KEY!);
-  form.append("response", token);
-  form.append("remoteip", ip);
-  let outcome: { success?: boolean; hostname?: string; "error-codes"?: string[] };
-  try {
-    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form });
-    outcome = (await res.json()) as typeof outcome;
-  } catch {
-    // siteverify unreachable: fail closed.
-    throw new ApiError(503, "VERIFICATION_UNAVAILABLE", "Human verification is temporarily unavailable. Please try again.");
-  }
-  // Cloudflare rejects invalid, expired and already-redeemed tokens (e.g. timeout-or-duplicate).
-  if (!outcome.success) throw new ApiError(403, "VERIFICATION_FAILED", "Human verification failed. Please try again.");
-  // A valid token must have been solved on the canonical host.
-  if (outcome.hostname !== new URL(CANONICAL_ORIGIN).hostname) {
-    throw new ApiError(403, "VERIFICATION_FAILED", "Human verification failed. Please try again.");
-  }
-  return "verified";
 }
 
 function text(body: Record<string, unknown>, key: string, min: number, max: number, fields: Record<string, string>): string {
@@ -196,8 +156,6 @@ export async function foundingAccessSubmit(request: Request, env: Env, nowMs: nu
   if (!usesMcp) fields.uses_mcp = "Choose an option.";
   if (Object.keys(fields).length) throw new ApiError(400, "INVALID_REQUEST", "Please correct the highlighted fields.", { fields });
 
-  const turnstile = await verifyTurnstile(env, body.turnstile_token, ip);
-
   const now = iso(nowMs);
   const dayAgo = iso(nowMs - 24 * 60 * 60 * 1000);
   const duplicate = await env.DB.prepare(`SELECT id FROM founding_access_requests WHERE work_email = ? AND created_at > ? LIMIT 1`)
@@ -206,11 +164,12 @@ export async function foundingAccessSubmit(request: Request, env: Env, nowMs: nu
   if (duplicate) return json({ ok: true }, 201);
 
   const ipHash = await sha256Hex(`${ip}|${now.slice(0, 10)}|${env.FORM_SIGNING_KEY}`);
+  // `turnstile` is a legacy column from V1 (CHECK constraint); Turnstile is not used, so it is always 'not_configured'.
   await env.DB.prepare(
     `INSERT INTO founding_access_requests (id, name, company, work_email, use_case, agent_count, uses_mcp, ip_hash, turnstile, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(newId("fa"), name, company, email, useCase, agentCount, usesMcp, ipHash, turnstile, now)
+    .bind(newId("fa"), name, company, email, useCase, agentCount, usesMcp, ipHash, "not_configured", now)
     .run();
   return json({ ok: true }, 201);
 }
@@ -256,7 +215,7 @@ export async function ready(env: Env): Promise<Response> {
       schema = false;
     }
   }
-  const checks = { d1, schema, form_signing: !!env.FORM_SIGNING_KEY, turnstile: !!env.TURNSTILE_SECRET_KEY && !!env.TURNSTILE_SITE_KEY ? "enforced" : !env.TURNSTILE_SECRET_KEY && !env.TURNSTILE_SITE_KEY ? "not_configured" : "misconfigured" };
+  const checks = { d1, schema, form_signing: !!env.FORM_SIGNING_KEY };
   const isReady = d1 && schema;
   return json({ ready: isReady, checks }, isReady ? 200 : 503);
 }

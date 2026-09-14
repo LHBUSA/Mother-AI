@@ -18,10 +18,15 @@ preview_urls = false
 # host route below is more specific, so every path on mother.proptechusa.ai stays
 # on this Worker without changing the other products' routes.
 routes = [
+  # Public UI host — served by this Worker only until the Vercel cutover.
   { pattern = "mother.proptechusa.ai", custom_domain = true },
   { pattern = "mother.proptechusa.ai/*", zone_name = "proptechusa.ai" },
   # Path-specific counterpart for `*proptechusa.ai/news/*`, which outranks a host-only pattern.
   { pattern = "mother.proptechusa.ai/news/*", zone_name = "proptechusa.ai" },
+  # API host (config/site.json "apiOrigin"), pinned the same way against the zone wildcards.
+  { pattern = "api.mother.proptechusa.ai", custom_domain = true },
+  { pattern = "api.mother.proptechusa.ai/*", zone_name = "proptechusa.ai" },
+  { pattern = "api.mother.proptechusa.ai/news/*", zone_name = "proptechusa.ai" },
 ]
 
 [assets]
@@ -82,9 +87,6 @@ crons = ["*/10 * * * *"]
 
 [vars]
 ENVIRONMENT = "production"
-# Turnstile keys are Worker secrets (TURNSTILE_SITE_KEY, TURNSTILE_SECRET_KEY), not vars,
-# so a deploy can never overwrite them. With neither set, Founding Access relies on rate
-# limiting + honeypot + signed form timing; with both set, Turnstile is enforced.
 # Set at deploy time by scripts/deploy.mjs (--var GIT_SHA:<sha>).
 GIT_SHA = "dev"
 

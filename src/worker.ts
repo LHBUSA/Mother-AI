@@ -5,6 +5,7 @@
 //   /api/console/*       control-plane API (session auth)
 //   /api/demo/*          public demo workspace (stateless)
 //   /api/founding-access public early-access capture
+//   /api/public/badges/{t} public verification data (for the UI /verify page)
 //   /badge/{token}.svg   live badge
 //   /verify/{token}      public verification page
 //   /health, /ready      service health
@@ -19,13 +20,15 @@ import { routeV1 } from "./api/v1";
 import { routeAuth } from "./auth/passkeys";
 import { routeConsole } from "./api/console/index";
 import { demoEvaluate, demoWorkspace, foundingAccessSubmit, foundingAccessToken, health, ready } from "./api/public";
-import { handleBadgeSvg, handleVerifyPage } from "./badge/routes";
+import { handleBadgeSvg, handlePublicBadge, handleVerifyPage } from "./badge/routes";
 import { sweepExpiredApprovals } from "./gateway/approvals";
 import { robotsTxt, sitemapXml } from "./lib/seo";
 import { canonicalRedirect } from "./lib/site";
+import { applyCors, preflight } from "./lib/cors";
 
 const BADGE_SVG = /^\/badge\/([0-9A-Za-z]{1,64})\.svg$/;
 const VERIFY = /^\/verify\/([0-9A-Za-z]{1,64})\/?$/;
+const PUBLIC_BADGE = /^\/api\/public\/badges\/([0-9A-Za-z]{1,64})$/;
 
 async function handleApi(request: Request, env: Env, nowMs: number, ctx: ExecutionContext): Promise<Response> {
   const { pathname } = new URL(request.url);
@@ -36,6 +39,8 @@ async function handleApi(request: Request, env: Env, nowMs: number, ctx: Executi
     if (pathname === "/api/demo/evaluate") return request.method === "POST" ? await demoEvaluate(request, env) : methodNotAllowed(["POST"]);
     if (pathname === "/api/founding-access/token") return request.method === "GET" ? await foundingAccessToken(env, nowMs) : methodNotAllowed(["GET"]);
     if (pathname === "/api/founding-access") return request.method === "POST" ? await foundingAccessSubmit(request, env, nowMs) : methodNotAllowed(["POST"]);
+    const publicBadge = PUBLIC_BADGE.exec(pathname);
+    if (publicBadge) return request.method === "GET" ? await handlePublicBadge(request, env, publicBadge[1]!, nowMs, ctx) : methodNotAllowed(["GET"]);
     throw new ApiError(404, "NOT_FOUND", "Not found.");
   } catch (err) {
     if (err instanceof ApiError) return errorResponse(err);
@@ -101,6 +106,8 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(request.url);
+    const cors = preflight(request, env.ENVIRONMENT);
+    if (cors) return withSecurityHeaders(cors);
     let response: Response;
     try {
       response = await route(request, env, ctx);
@@ -110,7 +117,7 @@ export default {
         ? json({ decision: "block", error: { code: "INTERNAL_ERROR", message: "Mother AI encountered an internal error; failing closed." } }, 500)
         : json({ error: { code: "INTERNAL_ERROR", message: "Something went wrong." } }, 500);
     }
-    return withSecurityHeaders(response, { publicEmbed: BADGE_SVG.test(pathname) });
+    return applyCors(request, withSecurityHeaders(response, { publicEmbed: BADGE_SVG.test(pathname) }), env.ENVIRONMENT);
   },
 
   async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {

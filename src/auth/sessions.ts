@@ -7,6 +7,7 @@ import { ApiError } from "../lib/http";
 import { iso } from "../lib/time";
 import type { OrganizationRow } from "../lib/db";
 import type { Role } from "./rbac";
+import { allowedBrowserOrigins } from "../lib/site";
 
 export const SESSION_COOKIE = "__Host-mai_session";
 export const CHALLENGE_COOKIE = "__Host-mai_chal";
@@ -94,13 +95,20 @@ export async function loadSession(request: Request, env: Env, nowMs: number): Pr
 }
 
 /**
- * CSRF defense for cookie-authenticated mutations: SameSite=Strict cookies plus
- * an exact Origin match and a Fetch Metadata check.
+ * CSRF defense for cookie-authenticated mutations. The UI (mother.proptechusa.ai) and
+ * this API (api.mother.proptechusa.ai) are different origins on the same site, so:
+ *   - SameSite=Strict host-only session cookie (sent on same-site requests only),
+ *   - Origin must EXACTLY equal the UI origin (browser-set, not scriptable),
+ *   - Sec-Fetch-Site, when present, must be same-site (UI -> API) or same-origin.
+ * Cross-site writes, other proptechusa.ai subdomains and missing Origin are rejected.
  */
-export function assertSameOrigin(request: Request): void {
-  const url = new URL(request.url);
+export function assertBrowserOrigin(request: Request, environment: string): void {
   const origin = request.headers.get("Origin");
-  if (origin !== url.origin) throw new ApiError(403, "CSRF_REJECTED", "Cross-origin request rejected.");
+  if (!origin || !allowedBrowserOrigins(environment).includes(origin)) {
+    throw new ApiError(403, "CSRF_REJECTED", "Cross-origin request rejected.");
+  }
   const site = request.headers.get("Sec-Fetch-Site");
-  if (site && site !== "same-origin") throw new ApiError(403, "CSRF_REJECTED", "Cross-site request rejected.");
+  if (site && site !== "same-site" && site !== "same-origin") {
+    throw new ApiError(403, "CSRF_REJECTED", "Cross-site request rejected.");
+  }
 }

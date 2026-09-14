@@ -2,6 +2,7 @@
   "name": "Mother AI",
   "tagline": "Control Plane for AI Agents",
   "origin": "https://mother.proptechusa.ai",
+  "apiOrigin": "https://api.mother.proptechusa.ai",
   "fallbackOrigins": ["https://mother-ai.sales-fd3.workers.dev"],
   "title": "Mother AI — Access control, approvals and audit trails for AI agents",
   "description": "Mother AI sits between your AI agents and the actions they take. Deterministic policy enforcement, human approval and tamper-resistant audit trails for APIs, databases, payments and MCP tools.",

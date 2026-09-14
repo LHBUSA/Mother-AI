@@ -3,6 +3,7 @@
 
 import type { BadgeRow, OrganizationRow } from "../lib/db";
 import { iso } from "../lib/time";
+import { API_ORIGIN, UI_ORIGIN } from "../lib/site";
 
 export type BadgeStatus = "setup" | "active" | "suspended" | "revoked";
 
@@ -65,16 +66,28 @@ export const BADGE_TOKEN = /^[0-9A-Za-z]{32}$/;
 export const BADGE_DISCLAIMER =
   "Mother AI Protected indicates that this organization has configured and enabled Mother AI agent access controls. It is not a certification of the organization's entire cybersecurity program or a guarantee against security incidents.";
 
-export function badgeUrls(origin: string, token: string) {
+/** Badge image is served by the API (Worker); the human verification page lives on the UI host. */
+export function badgeUrls(token: string) {
   return {
-    verify_url: `${origin}/verify/${token}`,
-    svg_url: `${origin}/badge/${token}.svg`,
-    svg_light_url: `${origin}/badge/${token}.svg?theme=light`,
+    verify_url: `${UI_ORIGIN}/verify/${token}`,
+    svg_url: `${API_ORIGIN}/badge/${token}.svg`,
+    svg_light_url: `${API_ORIGIN}/badge/${token}.svg?theme=light`,
   };
 }
 
-export function badgeSnippets(origin: string, token: string) {
-  const u = badgeUrls(origin, token);
+/** Public, human-readable controls shown on the verification page. */
+export function badgeControls(criteria: BadgeCriterion[]): Array<{ label: string; met: boolean }> {
+  const met = (key: BadgeCriterion["key"]) => criteria.find((c) => c.key === key)?.met === true;
+  return [
+    { label: "Agent identity configured", met: met("active_agent") },
+    { label: "Policy enforcement enabled", met: met("gateway_enabled") && met("enabled_policy") && met("live_api_key") },
+    { label: "Human approval capability enabled", met: met("gateway_enabled") },
+    { label: "Audit logging enabled", met: met("audit_enabled") },
+  ];
+}
+
+export function badgeSnippets(token: string) {
+  const u = badgeUrls(token);
   const alt = "Mother AI Protected — AI Controls Active";
   return {
     markdown: `[![${alt}](${u.svg_url})](${u.verify_url})`,

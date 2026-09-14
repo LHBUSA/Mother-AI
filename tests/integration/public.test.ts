@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { call, createEnv, FALLBACK_ORIGIN, ORIGIN, seedAgent, seedKey, seedOrg } from "../helpers/env";
+import { API_ORIGIN, call, createEnv, FALLBACK_ORIGIN, ORIGIN, seedAgent, seedKey, seedOrg, seedPolicy, seedSession } from "../helpers/env";
 import { DEMO_SCENARIOS } from "../../src/demo/workspace";
 
 describe("demo workspace", () => {
@@ -41,13 +41,13 @@ describe("founding access", () => {
   const valid = { name: "Jane Doe", company: "Acme, Inc.", work_email: "Jane@Acme.com", use_case: "Govern refunds issued by our support agents.", agent_count: "6-25", uses_mcp: "yes", website: "" };
 
   async function token(env: ReturnType<typeof createEnv>) {
-    return ((await (await call(env, "/api/founding-access/token")).json()) as { form_token: string; turnstile_site_key: string | null });
+    return ((await (await call(env, "/api/founding-access/token")).json()) as { form_token: string });
   }
 
   it("stores a valid submission once the form has been open long enough", async () => {
     const env = createEnv();
     const t = await token(env);
-    expect(t.turnstile_site_key).toBeNull();
+    expect(Object.keys(t)).toEqual(["form_token"]);
     const tooFast = await call(env, "/api/founding-access", { json: { ...valid, form_token: t.form_token } });
     expect(tooFast.status).toBe(400);
     expect(await tooFast.json()).toMatchObject({ error: { code: "FORM_TOO_FAST" } });
@@ -161,6 +161,8 @@ describe("canonical host and workers.dev fallback", () => {
     }
     expect((await call(env, "/", {})).status).toBe(200);
     expect(await (await call(env, "/robots.txt", { host: FALLBACK_ORIGIN })).text()).toBe("User-agent: *\nDisallow: /\n");
+    expect(await (await call(env, "/robots.txt", { host: API_ORIGIN })).text()).toBe("User-agent: *\nDisallow: /\n");
+    expect((await call(env, "/app/login", { host: API_ORIGIN })).headers.get("Location")).toBe(`${ORIGIN}/app/login`);
     expect(await (await call(env, "/robots.txt")).text()).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
   });
 
@@ -178,106 +180,138 @@ describe("canonical host and workers.dev fallback", () => {
     expect(svg.headers.get("Content-Type")).toContain("image/svg+xml");
   });
 
-  it("refuses passkey ceremonies anywhere but the canonical host", async () => {
+  it("binds passkey ceremonies to the UI origin, whichever host receives the API call", async () => {
     const env = createEnv();
-    const res = await call(env, "/api/auth/login/options", { host: FALLBACK_ORIGIN, json: {}, origin: FALLBACK_ORIGIN });
-    expect(res.status).toBe(403);
-    expect(await res.json()).toMatchObject({ error: { code: "ORIGIN_NOT_ALLOWED" } });
-    const ok = await call(env, "/api/auth/login/options", { json: {} });
+    // UI origin calling the API host: allowed, RP ID is the UI hostname.
+    const ok = await call(env, "/api/auth/login/options", { host: API_ORIGIN, json: {}, origin: ORIGIN, headers: { "Sec-Fetch-Site": "same-site" } });
     expect(ok.status).toBe(200);
     expect(((await ok.json()) as { rpId: string }).rpId).toBe("mother.proptechusa.ai");
+    // Any other browser origin is refused before a challenge is issued.
+    for (const origin of [FALLBACK_ORIGIN, API_ORIGIN, "https://www.proptechusa.ai", "https://evil.example"]) {
+      const res = await call(env, "/api/auth/login/options", { host: API_ORIGIN, json: {}, origin });
+      expect(res.status).toBe(403);
+    }
   });
 });
 
-describe("founding access with Turnstile enforced", () => {
-  const valid = { name: "Jane Doe", company: "Acme, Inc.", work_email: "jane@acme.com", use_case: "Govern refunds issued by our support agents.", agent_count: "6-25", uses_mcp: "yes", website: "" };
-  const keys = { TURNSTILE_SITE_KEY: "0x4AAAAAAA-test-site-key", TURNSTILE_SECRET_KEY: "0x4AAAAAAA-test-secret" };
-  const realFetch = globalThis.fetch;
-  const redeemed = new Set<string>();
-  const calls: Array<Record<string, string>> = [];
+describe("browser API CORS matrix (UI on Vercel, API on the Worker)", () => {
+  const preflightFor = (env: ReturnType<typeof createEnv>, path: string, origin: string, method = "POST") =>
+    call(env, path, { host: API_ORIGIN, method: "OPTIONS", origin: null, headers: { Origin: origin, "Access-Control-Request-Method": method, "Access-Control-Request-Headers": "content-type" } });
 
-  function mockSiteverify() {
-    redeemed.clear();
-    calls.length = 0;
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
-      const form = init!.body as FormData;
-      const token = String(form.get("response"));
-      calls.push({ secret: String(form.get("secret")), response: token, remoteip: String(form.get("remoteip")) });
-      if (token === "good" || token === "good-2") {
-        if (redeemed.has(token)) return Response.json({ success: false, "error-codes": ["timeout-or-duplicate"] });
-        redeemed.add(token);
-        return Response.json({ success: true, hostname: "mother.proptechusa.ai" });
+  it("credentialed endpoints allow only the exact UI origin, with credentials", async () => {
+    const env = createEnv();
+    for (const path of ["/api/auth/login/options", "/api/console/agents"]) {
+      const ok = await preflightFor(env, path, ORIGIN);
+      expect(ok.status).toBe(204);
+      expect(ok.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+      expect(ok.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+      expect(ok.headers.get("Access-Control-Allow-Headers")).toBe("Content-Type");
+      expect(ok.headers.get("Vary")).toContain("Origin");
+      for (const bad of ["https://evil.example", "https://www.proptechusa.ai", FALLBACK_ORIGIN, "null"]) {
+        const res = await preflightFor(env, path, bad);
+        expect(res.status).toBe(403);
+        expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
       }
-      if (token === "other-host") return Response.json({ success: true, hostname: "evil.example" });
-      return Response.json({ success: false, "error-codes": ["invalid-input-response"] });
-    }) as typeof fetch;
-  }
-
-  async function submit(env: ReturnType<typeof createEnv>, extra: Record<string, unknown>) {
-    const t = (await (await call(env, "/api/founding-access/token")).json()) as { form_token: string; turnstile_site_key: string | null };
-    expect(t.turnstile_site_key).toBe(keys.TURNSTILE_SITE_KEY);
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(Date.now() + 10_000);
-    try {
-      return await call(env, "/api/founding-access", { json: { ...valid, form_token: t.form_token, ...extra } });
-    } finally {
-      vi.useRealTimers();
     }
-  }
-
-  it("accepts a valid token once, and rejects invalid, missing, replayed and wrong-host tokens", async () => {
-    mockSiteverify();
-    try {
-      const env = createEnv(keys);
-      expect(((await (await call(env, "/ready")).json()) as { checks: { turnstile: string } }).checks.turnstile).toBe("enforced");
-
-      const missing = await submit(env, {});
-      expect(missing.status).toBe(403);
-      expect(await missing.json()).toMatchObject({ error: { code: "VERIFICATION_FAILED" } });
-
-      const invalid = await submit(env, { turnstile_token: "forged" });
-      expect(invalid.status).toBe(403);
-
-      const wrongHost = await submit(env, { turnstile_token: "other-host" });
-      expect(wrongHost.status).toBe(403);
-
-      const ok = await submit(env, { turnstile_token: "good" });
-      expect(ok.status).toBe(201);
-      expect(calls.at(-1)).toEqual({ secret: keys.TURNSTILE_SECRET_KEY, response: "good", remoteip: "203.0.113.7" });
-
-      const replay = await submit(env, { turnstile_token: "good", work_email: "second@acme.com" });
-      expect(replay.status).toBe(403);
-
-      // Honeypot short-circuits before verification and stores nothing.
-      const bot = await submit(env, { website: "http://spam", turnstile_token: "forged", work_email: "bot@spam.example" });
-      expect(bot.status).toBe(201);
-
-      const rows = await env.DB.prepare(`SELECT work_email, turnstile, ip_hash FROM founding_access_requests`).all<Record<string, string>>();
-      expect(rows.results).toHaveLength(1);
-      expect(rows.results[0]).toMatchObject({ work_email: "jane@acme.com", turnstile: "verified" });
-      expect(rows.results[0]!.ip_hash).toMatch(/^[0-9a-f]{64}$/);
-      const all = JSON.stringify(await env.DB.prepare(`SELECT * FROM founding_access_requests`).all());
-      expect(all).not.toContain("203.0.113.7");
-    } finally {
-      globalThis.fetch = realFetch;
-    }
+    const session = await call(env, "/api/auth/session", { host: API_ORIGIN, headers: { Origin: ORIGIN } });
+    expect(session.status).toBe(401);
+    expect(session.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    expect(session.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+    const evil = await call(env, "/api/auth/session", { host: API_ORIGIN, headers: { Origin: "https://evil.example" } });
+    expect(evil.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 
-  it("fails closed when siteverify is unreachable or only one key is configured", async () => {
-    globalThis.fetch = (async () => {
-      throw new TypeError("network down");
-    }) as typeof fetch;
-    try {
-      const env = createEnv(keys);
-      const res = await submit(env, { turnstile_token: "good-2" });
-      expect(res.status).toBe(503);
-      expect((await env.DB.prepare(`SELECT COUNT(*) AS n FROM founding_access_requests`).first<{ n: number }>())?.n).toBe(0);
-    } finally {
-      globalThis.fetch = realFetch;
+  it("public browser endpoints allow the exact UI origin without credentials", async () => {
+    const env = createEnv();
+    for (const [path, method] of [["/api/demo/evaluate", "POST"], ["/api/demo/workspace", "GET"], ["/api/founding-access/token", "GET"], ["/api/founding-access", "POST"], [`/api/public/badges/${"A".repeat(32)}`, "GET"]] as const) {
+      const ok = await preflightFor(env, path, ORIGIN, method);
+      expect(ok.status).toBe(204);
+      expect(ok.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+      expect(ok.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+      expect((await preflightFor(env, path, "https://evil.example", method)).status).toBe(403);
     }
-    const half = createEnv({ TURNSTILE_SECRET_KEY: "only-secret" });
-    expect((await call(half, "/api/founding-access/token")).status).toBe(503);
-    expect(((await (await call(half, "/ready")).json()) as { checks: { turnstile: string } }).checks.turnstile).toBe("misconfigured");
+    const ws = await call(env, "/api/demo/workspace", { host: API_ORIGIN, headers: { Origin: ORIGIN } });
+    expect(ws.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    expect(ws.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+  });
+
+  it("server-to-server endpoints and images get no browser CORS", async () => {
+    const env = createEnv();
+    for (const path of ["/v1/evaluate", "/v1/mcp/evaluate", "/v1/approvals/apr_AAAAAAAAAAAAAAAAAAAAAA", "/v1/approvals/apr_AAAAAAAAAAAAAAAAAAAAAA/consume"]) {
+      const res = await preflightFor(env, path, ORIGIN);
+      expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+      expect(res.status).not.toBe(204);
+      const post = await call(env, path, { host: API_ORIGIN, json: {}, headers: { Origin: ORIGIN } });
+      expect(post.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    }
+    const svg = await call(env, `/badge/${"A".repeat(32)}.svg`, { host: API_ORIGIN, headers: { Origin: ORIGIN } });
+    expect(svg.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(svg.headers.get("Cross-Origin-Resource-Policy")).toBe("cross-origin");
+  });
+});
+
+describe("CSRF for the split UI/API origins", () => {
+  it("accepts same-site writes from the UI origin and rejects everything else", async () => {
+    const env = createEnv();
+    const orgId = await seedOrg(env);
+    const owner = await seedSession(env, orgId, "owner");
+    const body = { agent_id: "csrf-agent", display_name: "CSRF agent", environment: "staging" };
+    const ok = await call(env, "/api/console/agents", { host: API_ORIGIN, cookie: owner.cookie, json: body, origin: ORIGIN, headers: { "Sec-Fetch-Site": "same-site" } });
+    expect(ok.status).toBe(201);
+    const cases: Array<[string | null, string | undefined]> = [
+      ["https://evil.example", "cross-site"],
+      ["https://www.proptechusa.ai", "same-site"],
+      [API_ORIGIN, "same-origin"],
+      [FALLBACK_ORIGIN, "cross-site"],
+      [ORIGIN, "cross-site"],
+      [ORIGIN, "none"],
+      [null, undefined],
+    ];
+    for (const [origin, fetchSite] of cases) {
+      const res = await call(env, "/api/console/agents", {
+        host: API_ORIGIN,
+        cookie: owner.cookie,
+        json: { ...body, agent_id: `csrf-${Math.random().toString(36).slice(2, 8)}` },
+        origin,
+        headers: fetchSite ? { "Sec-Fetch-Site": fetchSite } : {},
+      });
+      expect([origin, fetchSite, res.status]).toEqual([origin, fetchSite, 403]);
+    }
+  });
+});
+
+describe("GET /api/public/badges/{token}", () => {
+  it("returns only public verification data, never cached, and fails closed for unknown tokens", async () => {
+    const env = createEnv();
+    const orgId = await seedOrg(env, { name: "Acme <Inc>" });
+    await seedAgent(env, orgId, "a1");
+    await seedPolicy(env, orgId, { name: "p", effect: "block", conditions: { match: "all", conditions: [] } });
+    await seedKey(env, orgId, "live");
+    const owner = await seedSession(env, orgId, "owner");
+    const created = (await (await call(env, "/api/console/badge/enable", { cookie: owner.cookie, method: "POST" })).json()) as { badge: { token: string; svg_url: string; verify_url: string } };
+    const token = created.badge.token;
+    expect(created.badge.svg_url).toBe(`${API_ORIGIN}/badge/${token}.svg`);
+    expect(created.badge.verify_url).toBe(`${ORIGIN}/verify/${token}`);
+
+    const res = await call(env, `/api/public/badges/${token}`, { host: API_ORIGIN, headers: { Origin: ORIGIN } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ status: "active", organization: { display_name: "Acme <Inc>" }, badge: { svg_url: `${API_ORIGIN}/badge/${token}.svg`, verify_url: `${ORIGIN}/verify/${token}` } });
+    expect((body.controls as Array<{ met: boolean }>).every((c) => c.met)).toBe(true);
+    expect(String(body.disclaimer)).toContain("not a certification");
+    const text = JSON.stringify(body);
+    expect(text).not.toContain(orgId);
+    expect(text).not.toMatch(/org_|bdg_|usr_|key_|agt_|pol_/);
+    expect(Object.keys(body).sort()).toEqual(["activated_on", "badge", "checked_at", "controls", "disclaimer", "last_gateway_activity_on", "organization", "policy_engine", "service_version", "status"]);
+
+    const missing = await call(env, `/api/public/badges/${"A".repeat(32)}`, { host: API_ORIGIN });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toMatchObject({ error: { code: "BADGE_NOT_FOUND" } });
+    expect((await call(env, "/api/public/badges/short", { host: API_ORIGIN })).status).toBe(404);
+    expect((await call(env, `/api/public/badges/${token}`, { host: API_ORIGIN, json: {} })).status).toBe(405);
+
+    env.limiters.RL_PUBLIC_BADGE!.blocked = true;
+    expect((await call(env, `/api/public/badges/${token}`, { host: API_ORIGIN })).status).toBe(429);
   });
 });

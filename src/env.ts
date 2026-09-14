@@ -19,8 +19,4 @@ export interface Env {
 
   /** Secret: signs founding-access form timing tokens. */
   FORM_SIGNING_KEY?: string;
-  /** Secret: Turnstile widget site key (public value, stored as a secret so deploys never blank it). */
-  TURNSTILE_SITE_KEY?: string;
-  /** Secret: Turnstile siteverify secret. Turnstile is enforced only when both keys are set. */
-  TURNSTILE_SECRET_KEY?: string;
 }
