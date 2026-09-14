@@ -3,8 +3,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -53,29 +52,23 @@ export function parseArgs(argv) {
 }
 
 /** Executes SQL against local or remote D1 through Wrangler. Returns parsed JSON results. */
+// Wrangler is invoked through its JS entry with the current Node binary and no shell, so SQL is
+// passed as a single argv entry and never re-parsed. (`--file` uses D1's import API, which the
+// OAuth token used for operations is not always authorized for; `--command` uses the query API.)
+const WRANGLER = join(ROOT, "node_modules", "wrangler", "bin", "wrangler.js");
+
 export function d1(statements, { remote }) {
-  const dir = mkdtempSync(join(tmpdir(), "mother-ops-"));
-  const file = join(dir, "ops.sql");
-  writeFileSync(file, statements.join(";\n") + ";\n");
-  try {
-    const out = execFileSync(
-      process.platform === "win32" ? "npx.cmd" : "npx",
-      ["wrangler", "d1", "execute", DATABASE, remote ? "--remote" : "--local", "--file", file, "--json", "--yes"],
-      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: process.platform === "win32" },
-    );
-    return JSON.parse(out.slice(out.indexOf("[")));
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  const out = execFileSync(
+    process.execPath,
+    [WRANGLER, "d1", "execute", DATABASE, remote ? "--remote" : "--local", "--command", statements.join(";\n") + ";", "--json", "--yes"],
+    { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  return JSON.parse(out.slice(out.indexOf("[")));
 }
 
+/** Runs one read query. */
 export function query(statement, { remote }) {
-  const out = execFileSync(
-    process.platform === "win32" ? "npx.cmd" : "npx",
-    ["wrangler", "d1", "execute", DATABASE, remote ? "--remote" : "--local", "--command", statement, "--json"],
-    { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], shell: process.platform === "win32" },
-  );
-  return JSON.parse(out.slice(out.indexOf("[")))[0]?.results ?? [];
+  return d1([statement], { remote })[0]?.results ?? [];
 }
 
 export function originFor(remote) {
