@@ -1,0 +1,39 @@
+{
+  "name": "mother-ai",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mother AI — Control Plane for AI Agents. Deterministic access control, human approval and audit trails for autonomous agents.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "vite build && wrangler dev",
+    "db:migrate:local": "wrangler d1 migrations apply mother-ai-prod --local",
+    "db:migrate:prod": "wrangler d1 migrations apply mother-ai-prod --remote",
+    "deploy": "node scripts/deploy.mjs",
+    "verify:prod": "node scripts/verify-prod.mjs"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "14.0.0",
+    "@simplewebauthn/server": "14.0.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260914.1",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.131.2"
+  }
+}

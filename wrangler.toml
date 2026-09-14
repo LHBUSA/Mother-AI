@@ -1,0 +1,77 @@
+# Mother AI — one Worker owns the marketing site, control plane, gateway API,
+# badge endpoints and static assets. Production must always correspond to a
+# committed, pushed `main`; deploy with `npm run deploy` (scripts/deploy.mjs).
+
+name = "mother-ai"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
+
+[assets]
+directory = "./dist/web"
+binding = "ASSETS"
+# Every request goes through the Worker so security headers, the SPA fallback
+# for /app/* and route ownership are decided in one place.
+run_worker_first = true
+html_handling = "auto-trailing-slash"
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "mother-ai-prod"
+database_id = "6269d02e-81bb-47ce-b64a-2843bcb190d1"
+migrations_dir = "migrations"
+
+# Workers Rate Limiting bindings. Counters are per Cloudflare location and
+# eventually consistent — a coarse abuse control, not a billing meter.
+[[ratelimits]]
+name = "RL_GATEWAY_IP"
+namespace_id = "4101"
+simple = { limit = 1200, period = 60 }
+
+[[ratelimits]]
+name = "RL_GATEWAY_KEY"
+namespace_id = "4102"
+simple = { limit = 600, period = 60 }
+
+[[ratelimits]]
+name = "RL_DEMO"
+namespace_id = "4103"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "RL_FORMS"
+namespace_id = "4104"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "RL_AUTH"
+namespace_id = "4105"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "RL_CONSOLE"
+namespace_id = "4106"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "RL_PUBLIC_BADGE"
+namespace_id = "4107"
+simple = { limit = 300, period = 60 }
+
+[triggers]
+# Sweeps expired approvals, sessions and auth challenges.
+crons = ["*/10 * * * *"]
+
+[vars]
+ENVIRONMENT = "production"
+# Public Turnstile site key. Empty = Turnstile not configured; forms fall back
+# to rate limiting + honeypot + signed form timing. Secret: TURNSTILE_SECRET_KEY.
+TURNSTILE_SITE_KEY = ""
+# Set at deploy time by scripts/deploy.mjs (--var GIT_SHA:<sha>).
+GIT_SHA = "dev"
+
+[observability]
+enabled = true
