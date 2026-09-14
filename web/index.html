@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>%SITE_TITLE%</title>
+    <meta name="description" content="%SITE_DESCRIPTION%" />
+    <link rel="canonical" href="%SITE_ORIGIN%/" />
+    <meta name="theme-color" content="#07080a" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="index, follow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="%SITE_NAME%" />
+    <meta property="og:url" content="%SITE_ORIGIN%/" />
+    <meta property="og:title" content="%SITE_TITLE%" />
+    <meta property="og:description" content="%SITE_DESCRIPTION%" />
+    <meta property="og:image" content="%SITE_ORIGIN%/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Mother AI — Your AI has permissions. Mother enforces them." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="%SITE_TITLE%" />
+    <meta name="twitter:description" content="%SITE_DESCRIPTION%" />
+    <meta name="twitter:image" content="%SITE_ORIGIN%/og.png" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preload" href="/fonts/inter-var-latin.woff2" as="font" type="font/woff2" crossorigin />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Mother AI",
+        "url": "%SITE_ORIGIN%/",
+        "logo": "%SITE_ORIGIN%/brand/mark.svg",
+        "description": "Mother AI is a control plane for AI agents: deterministic access control, human approval and audit trails for the actions autonomous agents take."
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Mother AI",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Web",
+        "url": "%SITE_ORIGIN%/",
+        "description": "%SITE_DESCRIPTION%",
+        "featureList": [
+          "Agent identity registry",
+          "Deterministic policy enforcement (allow, review, block)",
+          "Human approval workflow",
+          "MCP tool call policy evaluation",
+          "Tamper-resistant, append-oriented audit trail",
+          "Mother AI Protected verification badge"
+        ]
+      }
+    </script>
+    <script type="module" src="/src/marketing/main.ts"></script>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+      <defs>
+        <symbol id="mark" viewBox="0 0 64 64">
+          <path d="M32 5.5 53 13v17.2c0 13.4-8.7 23.9-21 28.3C19.7 54.1 11 43.6 11 30.2V13L32 5.5Z" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round" />
+          <path d="M20.5 27.5a11.5 11.5 0 0 1 23 0" fill="none" stroke="#B7FF4A" stroke-width="3.2" stroke-linecap="round" />
+          <circle cx="32" cy="33" r="5" fill="#B7FF4A" />
+          <path d="M32 38v6.5M24 43.5h16" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5 6.5 11.5 12.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+        <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></symbol>
+      </defs>
+    </svg>
+
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="nav" data-nav>
+      <div class="container nav__inner">
+        <a class="brand" href="/" aria-label="Mother AI home">
+          <svg class="brand__mark" aria-hidden="true"><use href="#mark" /></svg>
+          <span class="brand__word">Mother<span class="brand__ai">AI</span></span>
+        </a>
+        <nav class="nav__links" aria-label="Primary">
+          <a href="#how-it-works">How it works</a>
+          <a href="#demo">Demo</a>
+          <a href="#policies">Policies</a>
+          <a href="#mcp">MCP</a>
+          <a href="#badge">Badge</a>
+        </nav>
+        <div class="nav__actions">
+          <a class="btn btn--ghost btn--sm" href="/app/">Sign in</a>
+          <a class="btn btn--primary btn--sm" href="#founding-access">Founding Access</a>
+        </div>
+        <button class="nav__toggle" type="button" aria-expanded="false" aria-controls="mobile-nav" data-nav-toggle>
+          <span class="sr-only">Open menu</span>
+          <span class="nav__toggle-bars" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="drawer" id="mobile-nav" hidden data-drawer>
+        <nav class="drawer__links" aria-label="Mobile">
+          <a href="#how-it-works">How it works</a>
+          <a href="#demo">Live demo</a>
+          <a href="#identity">Agent identity</a>
+          <a href="#policies">Policy enforcement</a>
+          <a href="#mcp">MCP</a>
+          <a href="#approval">Human approval</a>
+          <a href="#audit">Audit trail</a>
+          <a href="#badge">Protected badge</a>
+        </nav>
+        <div class="drawer__actions">
+          <a class="btn btn--primary" href="#founding-access">Start protecting agents</a>
+          <a class="btn btn--ghost" href="/app/">Sign in</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <!-- ================================================================ HERO -->
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero__backdrop" aria-hidden="true"></div>
+        <div class="container hero__grid">
+          <div class="hero__copy">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Control Plane for AI Agents</p>
+            <h1 id="hero-title" class="hero__title">Your AI has permissions. <span class="hl">Mother enforces them.</span></h1>
+            <p class="hero__sub">Identity. Permissions. Human Approval. Audit Trails.</p>
+            <p class="hero__lede">
+              Mother AI sits between your agents and the actions they take. Every protected call — a refund, a CRM update,
+              a database write, an MCP tool — is checked against your policies before it runs, and answered with
+              <b class="t-allow">allow</b>, <b class="t-review">review</b> or <b class="t-block">block</b>.
+            </p>
+            <div class="hero__cta">
+              <a class="btn btn--primary btn--lg" href="#founding-access">Start protecting agents <svg class="ico" aria-hidden="true"><use href="#i-arrow" /></svg></a>
+              <a class="btn btn--ghost btn--lg" href="#how-it-works">See how it works</a>
+            </div>
+            <ul class="hero__facts" aria-label="Core properties">
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Deterministic decisions</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Fail-closed by default</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>MCP-aware</li>
+            </ul>
+          </div>
+
+          <figure class="gw" aria-label="Diagram: agents send requests through Mother AI, which allows, holds for review, or blocks each action before it reaches your tools." data-gateway>
+            <div class="gw__head">
+              <span class="gw__title"><span class="dot dot--live"></span>Gateway</span>
+              <span class="gw__meta mono">POST /v1/evaluate</span>
+            </div>
+            <div class="gw__body">
+              <ol class="gw__col gw__agents" aria-label="Agents">
+                <li class="node" data-agent="0"><span class="node__k">agent</span><span class="node__v">billing-agent-prod</span></li>
+                <li class="node" data-agent="1"><span class="node__k">agent</span><span class="node__v">research-agent-prod</span></li>
+                <li class="node" data-agent="2"><span class="node__k">agent</span><span class="node__v">sales-agent-prod</span></li>
+                <li class="node" data-agent="3"><span class="node__k">agent</span><span class="node__v">support-agent</span></li>
+              </ol>
+              <svg class="gw__wires gw__wires--in" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <path data-in="0" d="M0 12.5 C 55 12.5, 45 50, 100 50" />
+                <path data-in="1" d="M0 37.5 C 55 37.5, 45 50, 100 50" />
+                <path data-in="2" d="M0 62.5 C 55 62.5, 45 50, 100 50" />
+                <path data-in="3" d="M0 87.5 C 55 87.5, 45 50, 100 50" />
+              </svg>
+              <div class="gw__core">
+                <div class="core" data-core>
+                  <div class="core__ring" aria-hidden="true"></div>
+                  <svg class="core__mark" aria-hidden="true"><use href="#mark" /></svg>
+                  <span class="core__name">Mother</span>
+                  <span class="core__stamp" data-stamp aria-live="off">ALLOW</span>
+                </div>
+              </div>
+              <svg class="gw__wires gw__wires--out" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <path data-out="0" d="M0 50 C 55 50, 45 10, 100 10" />
+                <path data-out="1" d="M0 50 C 55 50, 45 30, 100 30" />
+                <path data-out="2" d="M0 50 C 55 50, 45 50, 100 50" />
+                <path data-out="3" d="M0 50 C 55 50, 45 70, 100 70" />
+                <path data-out="4" d="M0 50 C 55 50, 45 90, 100 90" />
+              </svg>
+              <ol class="gw__col gw__tools" aria-label="Tools">
+                <li class="node node--tool" data-tool="0"><span class="node__k">payments</span><span class="node__v">Stripe API</span></li>
+                <li class="node node--tool" data-tool="1"><span class="node__k">crm</span><span class="node__v">Salesforce</span></li>
+                <li class="node node--tool" data-tool="2"><span class="node__k">database</span><span class="node__v">orders-db</span></li>
+                <li class="node node--tool" data-tool="3"><span class="node__k">mcp</span><span class="node__v">github server</span></li>
+                <li class="node node--tool" data-tool="4"><span class="node__k">egress</span><span class="node__v">external API</span></li>
+              </ol>
+            </div>
+            <div class="gw__log" aria-hidden="true">
+              <div class="log__row" data-log>
+                <span class="pill pill--allow" data-log-decision>ALLOW</span>
+                <span class="log__text mono" data-log-text>billing-agent-prod · payments.refund · $180.00</span>
+                <span class="log__code mono" data-log-code>POLICY_ALLOW</span>
+              </div>
+            </div>
+            <figcaption class="gw__caption">Illustrative requests. Decisions are made by your policies, not a model.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ================================================================ PROBLEM -->
+      <section class="section" id="problem" aria-labelledby="problem-title">
+        <div class="container">
+          <header class="section__head">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>The actual problem</p>
+            <h2 id="problem-title">The risk isn't science fiction. It's software holding production credentials.</h2>
+            <p class="lede">
+              Agents are being wired into the same systems your employees use — often with a single broad API key and no checkpoint
+              between what the model decides and what the system executes. Your employees have permissions. Your AI agents should too.
+            </p>
+          </header>
+
+          <div class="surfaces">
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 7h16v10H4zM4 10h16M8 14h3" /></svg></span><h3>Payments</h3></div>
+              <p>Refunds, payouts, credits and subscription changes executed on a model's judgment.</p>
+              <code class="surface__ex">payments.refund → payment:pi_…</code>
+            </article>
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.2" /><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5M15 6h6M15 10h6M17 14h4" /></svg></span><h3>CRM</h3></div>
+              <p>Contact updates, pipeline changes and bulk edits across customer records.</p>
+              <code class="surface__ex">salesforce.contacts.update</code>
+            </article>
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="2.6" /><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6" /></svg></span><h3>Databases</h3></div>
+              <p>Reads that turn into writes, deletes and migrations against live data.</p>
+              <code class="surface__ex">records.modify → table:orders</code>
+            </article>
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M8 7 3 12l5 5M16 7l5 5-5 5M13.5 5l-3 14" /></svg></span><h3>Internal APIs</h3></div>
+              <p>Admin endpoints and service-to-service calls that were never designed for autonomous callers.</p>
+              <code class="surface__ex">accounts.suspend → user:8841</code>
+            </article>
+            <article class="surface surface--accent">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5" /><rect x="14" y="13" width="7" height="7" rx="1.5" /><path d="M10 7.5h4a3 3 0 0 1 3 3V13M14 16.5h-4a3 3 0 0 1-3-3V11" /></svg></span><h3>MCP tools</h3></div>
+              <p>Every MCP server added to an agent is a new set of tools it can call without asking.</p>
+              <code class="surface__ex">github.merge_pull_request</code>
+            </article>
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 7 8.5-7" /></svg></span><h3>Email</h3></div>
+              <p>Outbound messages to customers, vendors and anyone else an agent decides to contact.</p>
+              <code class="surface__ex">email.send → destination:external</code>
+            </article>
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5H10l2 2.5h6.5A1.5 1.5 0 0 1 20 9v8.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" /></svg></span><h3>File systems</h3></div>
+              <p>Shared drives, buckets and repositories — including the restricted data inside them.</p>
+              <code class="surface__ex">files.export → data_class:restricted</code>
+            </article>
+            <article class="surface">
+              <div class="surface__top"><span class="surface__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="2" /><circle cx="18.5" cy="6" r="2" /><circle cx="18.5" cy="18" r="2" /><path d="M7.4 11.1 16.6 6.9M7.4 12.9l9.2 4.2" /></svg></span><h3>Business workflows</h3></div>
+              <p>Approvals, provisioning and order flows where one wrong step has real consequences.</p>
+              <code class="surface__ex">orders.cancel → order:SO-20931</code>
+            </article>
+          </div>
+
+          <div class="contrast">
+            <div class="contrast__col contrast__col--before">
+              <p class="contrast__label mono">Typical agent access today</p>
+              <ul>
+                <li>One long-lived key with broad scopes</li>
+                <li>No record of which agent did what, or why</li>
+                <li>No checkpoint before high-impact actions</li>
+                <li>Revoking access means rotating everything</li>
+              </ul>
+            </div>
+            <div class="contrast__arrow" aria-hidden="true"><svg class="ico"><use href="#i-arrow" /></svg></div>
+            <div class="contrast__col contrast__col--after">
+              <p class="contrast__label mono">With Mother AI</p>
+              <ul>
+                <li>A stable identity for every agent</li>
+                <li>Least-privilege policies evaluated on every action</li>
+                <li>Human approval where the stakes require it</li>
+                <li>An evidence trail for every decision</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ HOW IT WORKS -->
+      <section class="section section--rule" id="how-it-works" aria-labelledby="how-title">
+        <div class="container">
+          <header class="section__head">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>How it works</p>
+            <h2 id="how-title">One checkpoint between the decision and the action.</h2>
+            <p class="lede">
+              Your agent — or the tool layer it calls through — asks Mother before executing a protected action. Mother answers in a single
+              deterministic evaluation and records the evidence. Anything other than an explicit <b class="t-allow">allow</b> means do not execute.
+            </p>
+          </header>
+
+          <ol class="steps">
+            <li class="step">
+              <span class="step__n mono">01</span>
+              <h3>Identify the agent</h3>
+              <p>The request is authenticated with an organization key and matched to a registered agent identity and environment.</p>
+              <code class="step__code">agent_id: "billing-agent-prod"</code>
+            </li>
+            <li class="step">
+              <span class="step__n mono">02</span>
+              <h3>Evaluate the requested action</h3>
+              <p>Capability, operation, resource, destination, data class and context are normalized into one canonical request.</p>
+              <code class="step__code">payments.refund · amount 4200</code>
+            </li>
+            <li class="step">
+              <span class="step__n mono">03</span>
+              <h3>Apply policy</h3>
+              <p>Every enabled policy in scope is evaluated. Precedence is fixed and documented — never dependent on rule order.</p>
+              <code class="step__code">block &gt; review &gt; allow &gt; default</code>
+            </li>
+            <li class="step">
+              <span class="step__n mono">04</span>
+              <h3>Allow, review or block</h3>
+              <p>Mother returns a machine-readable decision and reason code. Review holds the action for a human approver.</p>
+              <code class="step__code"><span class="t-allow">allow</span> · <span class="t-review">review</span> · <span class="t-block">block</span></code>
+            </li>
+            <li class="step">
+              <span class="step__n mono">05</span>
+              <h3>Record evidence</h3>
+              <p>The decision, policy, reason and redacted context are written to an append-oriented audit trail before the response.</p>
+              <code class="step__code">decision_id: "dec_…"</code>
+            </li>
+          </ol>
+
+          <div class="failclosed">
+            <div class="failclosed__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></svg></div>
+            <div>
+              <h3>Fail closed, by design</h3>
+              <p>Invalid key, disabled organization, unknown agent, malformed policy or an evaluation error all resolve to <b class="t-block">block</b> with a reason code. Mother never allows an action because something went wrong.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ DEMO -->
+      <section class="section section--demo" id="demo" aria-labelledby="demo-title">
+        <div class="container">
+          <header class="section__head section__head--split">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>Live interactive demo</p>
+              <h2 id="demo-title">Send a request. Watch the policy engine decide.</h2>
+            </div>
+            <p class="lede">
+              This runs the production Mother AI policy engine against a fixed demo workspace. Pick a scenario or edit the request — the decision,
+              the reason and the policy that fired come straight from the engine.
+            </p>
+          </header>
+
+          <div class="demo" data-demo>
+            <div class="demo__banner" role="note">
+              <span class="demo__banner-tag mono">DEMO</span>
+              <span>Demo policy workspace — simulated requests, not stored, never mixed with customer audit data.</span>
+            </div>
+
+            <div class="demo__grid">
+              <form class="demo__form" data-demo-form novalidate>
+                <fieldset class="demo__scenarios">
+                  <legend class="field__label">Scenarios</legend>
+                  <div class="chips" data-demo-scenarios>
+                    <span class="chips__placeholder">Loading demo workspace…</span>
+                  </div>
+                </fieldset>
+
+                <div class="fields">
+                  <label class="field field--full">
+                    <span class="field__label">Agent</span>
+                    <select name="agent_id" data-demo-agent disabled>
+                      <option value="">—</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Capability</span>
+                    <input name="capability" autocomplete="off" spellcheck="false" placeholder="payments" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Operation</span>
+                    <input name="operation" autocomplete="off" spellcheck="false" placeholder="refund" />
+                  </label>
+                  <label class="field field--full">
+                    <span class="field__label">Resource</span>
+                    <input name="resource" autocomplete="off" spellcheck="false" placeholder="payment:pi_123" />
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Destination</span>
+                    <select name="destination">
+                      <option value="">(none)</option>
+                      <option value="internal">internal</option>
+                      <option value="external">external</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span class="field__label">Data class</span>
+                    <select name="data_class">
+                      <option value="">(none)</option>
+                      <option value="public">public</option>
+                      <option value="internal">internal</option>
+                      <option value="confidential">confidential</option>
+                      <option value="financial">financial</option>
+                      <option value="restricted">restricted</option>
+                    </select>
+                  </label>
+                  <label class="field field--full">
+                    <span class="field__label">context.amount <span class="field__hint">optional, numeric</span></span>
+                    <input name="amount" inputmode="decimal" autocomplete="off" placeholder="4200" />
+                  </label>
+                </div>
+
+                <div class="demo__actions">
+                  <button class="btn btn--primary" type="submit" data-demo-run disabled>
+                    <span data-demo-run-label>Evaluate request</span>
+                  </button>
+                  <p class="demo__status" data-demo-status role="status" aria-live="polite"></p>
+                </div>
+              </form>
+
+              <div class="demo__out">
+                <div class="result" data-demo-result data-state="idle" aria-live="polite">
+                  <div class="result__idle">
+                    <div class="result__idle-mark" aria-hidden="true"><svg><use href="#mark" /></svg></div>
+                    <p>Choose a scenario and evaluate it. The decision appears here.</p>
+                  </div>
+                  <div class="result__body">
+                    <div class="result__top">
+                      <span class="verdict" data-r-decision>—</span>
+                      <div class="result__timing">
+                        <span class="mono" data-r-ms>—</span>
+                        <span class="result__timing-label">Round trip, measured in your browser</span>
+                      </div>
+                    </div>
+                    <dl class="kv">
+                      <div><dt>reason_code</dt><dd class="mono" data-r-code>—</dd></div>
+                      <div><dt>reason</dt><dd data-r-reason>—</dd></div>
+                      <div><dt>policy</dt><dd data-r-policy>—</dd></div>
+                      <div><dt>evaluated</dt><dd class="mono" data-r-evaluated>—</dd></div>
+                      <div><dt>engine</dt><dd class="mono" data-r-engine>—</dd></div>
+                    </dl>
+                    <div class="matched">
+                      <p class="field__label">Matched policies</p>
+                      <ul data-r-matched></ul>
+                    </div>
+                  </div>
+                  <div class="result__error">
+                    <p class="result__error-title" data-r-error-title>Demo unavailable</p>
+                    <p data-r-error>The demo workspace could not be reached. Please try again shortly.</p>
+                  </div>
+                </div>
+
+                <div class="json" data-demo-json>
+                  <div class="json__tabs" role="tablist" aria-label="Request and response JSON">
+                    <button type="button" role="tab" aria-selected="true" aria-controls="json-request" id="tab-request" data-json-tab="request">Request</button>
+                    <button type="button" role="tab" aria-selected="false" aria-controls="json-response" id="tab-response" data-json-tab="response" tabindex="-1">Response</button>
+                    <span class="json__endpoint mono">POST /api/demo/evaluate</span>
+                  </div>
+                  <pre class="json__pane" id="json-request" role="tabpanel" aria-labelledby="tab-request" tabindex="0"><code data-json-request>{}</code></pre>
+                  <pre class="json__pane" id="json-response" role="tabpanel" aria-labelledby="tab-response" tabindex="0" hidden><code data-json-response>// Evaluate a request to see the response</code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ IDENTITY -->
+      <section class="section" id="identity" aria-labelledby="identity-title">
+        <div class="container split">
+          <div class="split__copy">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Agent identity</p>
+            <h2 id="identity-title">Every agent gets a name, an environment and a leash.</h2>
+            <p class="lede">
+              Stop treating "the AI" as one anonymous API key. Register each agent with a stable identity so policies, approvals and evidence
+              all attach to the specific agent that acted.
+            </p>
+            <ul class="checks">
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Stable agent IDs.</b> <span>Human-readable keys like <code>collections-agent-prod</code> that survive model and prompt changes.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Environment binding.</b> <span>A staging agent can't present itself as production.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Registered-agent mode.</b> <span>Requests from agents you haven't registered fail closed.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Disable one agent instantly.</b> <span>Without rotating credentials for every other agent.</span></div></li>
+            </ul>
+          </div>
+
+          <div class="idcard" aria-label="Example agent identity">
+            <div class="idcard__head">
+              <div class="idcard__avatar mono" aria-hidden="true">BA</div>
+              <div>
+                <p class="idcard__name">Billing Agent</p>
+                <p class="idcard__key mono">billing-agent-prod</p>
+              </div>
+              <span class="status status--ok"><span class="dot dot--ok"></span>Active</span>
+            </div>
+            <dl class="idcard__grid">
+              <div><dt>Environment</dt><dd><span class="tag tag--prod">production</span></dd></div>
+              <div><dt>Default mode</dt><dd><span class="t-block mono">block</span></dd></div>
+              <div><dt>Bound policies</dt><dd class="mono">3</dd></div>
+              <div><dt>Gateway key</dt><dd class="mono">mai_live_7Qf2…</dd></div>
+            </dl>
+            <div class="idcard__policies">
+              <p class="field__label">Policies</p>
+              <ul>
+                <li><span class="pill pill--allow">ALLOW</span>Refunds up to threshold</li>
+                <li><span class="pill pill--review">REVIEW</span>High-value refunds require approval</li>
+                <li><span class="pill pill--block">BLOCK</span>Restricted data egress</li>
+              </ul>
+            </div>
+            <p class="idcard__foot">Example agent. Keys are shown by prefix only — Mother never stores raw keys.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ POLICIES -->
+      <section class="section section--rule" id="policies" aria-labelledby="policies-title">
+        <div class="container">
+          <header class="section__head">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Policy enforcement</p>
+            <h2 id="policies-title">Deterministic rules your security team can read.</h2>
+            <p class="lede">
+              Build policies visually from the fields Mother evaluates. Same request, same policies, same decision — every time.
+              No language model decides whether a protected operation is permitted.
+            </p>
+          </header>
+
+          <div class="policy">
+            <div class="builder" aria-label="Example policy in the rule builder">
+              <div class="builder__head">
+                <div>
+                  <p class="builder__name">High-value refunds require approval</p>
+                  <p class="builder__meta mono">priority 20 · scope: billing-agent-prod · v3</p>
+                </div>
+                <span class="toggle" aria-hidden="true"><span></span></span>
+              </div>
+              <div class="rule">
+                <div class="rule__row">
+                  <span class="rule__kw">IF</span>
+                  <span class="tok tok--field">capability</span><span class="tok tok--op">equals</span><span class="tok tok--val">payments</span>
+                </div>
+                <div class="rule__row">
+                  <span class="rule__kw">AND</span>
+                  <span class="tok tok--field">operation</span><span class="tok tok--op">equals</span><span class="tok tok--val">refund</span>
+                </div>
+                <div class="rule__row">
+                  <span class="rule__kw">AND</span>
+                  <span class="tok tok--field">context.amount</span><span class="tok tok--op">greater_than</span><span class="tok tok--val">1000</span>
+                </div>
+                <div class="rule__row rule__row--then">
+                  <span class="rule__kw">THEN</span>
+                  <span class="tok tok--effect">REQUIRE HUMAN APPROVAL</span>
+                </div>
+              </div>
+              <div class="builder__test" aria-label="Rule preview">
+                <p class="field__label">Preview against sample requests</p>
+                <ul>
+                  <li><span class="mono">payments.refund · amount 4200</span><span class="builder__arrow" aria-hidden="true"></span><span class="pill pill--review">REVIEW</span></li>
+                  <li><span class="mono">payments.refund · amount 180</span><span class="builder__arrow" aria-hidden="true"></span><span class="pill pill--neutral">NO MATCH</span></li>
+                  <li><span class="mono">payments.refund · no amount</span><span class="builder__arrow" aria-hidden="true"></span><span class="pill pill--review">REVIEW</span></li>
+                </ul>
+              </div>
+              <div class="builder__foot">
+                <span class="mono">fields</span>
+                <span class="chip-s">agent</span><span class="chip-s">environment</span><span class="chip-s">capability</span><span class="chip-s">operation</span><span class="chip-s">resource</span><span class="chip-s">destination</span><span class="chip-s">data_class</span><span class="chip-s">context.*</span>
+              </div>
+            </div>
+
+            <div class="policy__side">
+              <div class="ladder">
+                <p class="field__label">Precedence</p>
+                <ol>
+                  <li><span class="ladder__n mono">1</span><span class="pill pill--block">BLOCK</span><span>Any matching block policy wins.</span></li>
+                  <li><span class="ladder__n mono">2</span><span class="pill pill--review">REVIEW</span><span>Otherwise, any matching review policy holds the action.</span></li>
+                  <li><span class="ladder__n mono">3</span><span class="pill pill--allow">ALLOW</span><span>Otherwise, a matching allow policy permits it.</span></li>
+                  <li><span class="ladder__n mono">4</span><span class="pill pill--default">DEFAULT</span><span>Nothing matched: the configured default — deny unless you choose otherwise.</span></li>
+                </ol>
+                <p class="ladder__note">Priority decides which policy is reported when several of the same effect match — it never lets an allow override a block.</p>
+              </div>
+              <div class="ops">
+                <p class="field__label">Operators</p>
+                <div class="ops__list mono">
+                  <span>equals</span><span>not_equals</span><span>in</span><span>not_in</span><span>starts_with</span><span>greater_than</span><span>less_than</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="examples">
+            <article class="example">
+              <p class="example__tag mono">Read-only research</p>
+              <h3>research-agent-prod</h3>
+              <p><span class="t-allow">Allow</span> <code>knowledge.read</code> and <code>records.read</code>. <span class="t-block">Block</span> <code>records.modify</code> and anything under <code>finance</code>.</p>
+            </article>
+            <article class="example">
+              <p class="example__tag mono">High-value finance</p>
+              <h3>billing-agent-prod</h3>
+              <p><span class="t-allow">Allow</span> refunds under the threshold. Above it, <span class="t-review">review</span> — a human approves before execution.</p>
+            </article>
+            <article class="example">
+              <p class="example__tag mono">Restricted-data egress</p>
+              <h3>All agents</h3>
+              <p>If <code>data_class = restricted</code> and <code>destination = external</code>, <span class="t-block">block</span>. No exceptions by prompt.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ MCP -->
+      <section class="section section--mcp" id="mcp" aria-labelledby="mcp-title">
+        <div class="container">
+          <header class="section__head">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>MCP governance</p>
+            <h2 id="mcp-title">Every MCP tool call is an action. Treat it like one.</h2>
+            <p class="lede">
+              The Model Context Protocol makes it trivial to hand an agent new tools. Mother understands an MCP tool call — server, tool,
+              arguments, calling agent and organization — and normalizes it into the same canonical request as any other action, so one
+              policy set governs both.
+            </p>
+          </header>
+
+          <div class="mcp">
+            <div class="normalize" aria-label="MCP tool call normalization">
+              <div class="normalize__card">
+                <p class="normalize__label mono">MCP tool call</p>
+<pre><code><span class="c-k">"server"</span>: <span class="c-s">"salesforce"</span>,
+<span class="c-k">"tool"</span>: <span class="c-s">"contacts.update"</span>,
+<span class="c-k">"arguments"</span>: {
+  <span class="c-k">"contact_id"</span>: <span class="c-s">"003Hx…"</span>,
+  <span class="c-k">"email_opt_out"</span>: <span class="c-b">true</span>
+}</code></pre>
+              </div>
+              <div class="normalize__arrow" aria-hidden="true">
+                <span class="normalize__line"></span>
+                <span class="normalize__chip mono">normalize</span>
+                <span class="normalize__line"></span>
+              </div>
+              <div class="normalize__card normalize__card--canon">
+                <p class="normalize__label mono">Canonical Mother request</p>
+<pre><code><span class="c-k">"agent_id"</span>: <span class="c-s">"sales-agent-prod"</span>,
+<span class="c-k">"protocol"</span>: <span class="c-s">"mcp"</span>,
+<span class="c-k">"capability"</span>: <span class="c-s">"salesforce"</span>,
+<span class="c-k">"operation"</span>: <span class="c-s">"contacts.update"</span>,
+<span class="c-k">"resource"</span>: <span class="c-s">"contact:003Hx…"</span>,
+<span class="c-k">"context"</span>: { … }</code></pre>
+              </div>
+            </div>
+
+            <div class="code">
+              <div class="code__head">
+                <span class="code__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="mono">before-tool-call.ts</span>
+              </div>
+<pre class="code__body"><code><span class="c-c">// Ask Mother before your MCP client executes a tool call.</span>
+<span class="c-kw">const</span> res = <span class="c-kw">await</span> fetch(<span class="c-s">"%SITE_ORIGIN%/v1/mcp/evaluate"</span>, {
+  method: <span class="c-s">"POST"</span>,
+  headers: {
+    Authorization: <span class="c-s">`Bearer ${process.env.MOTHER_API_KEY}`</span>,
+    <span class="c-s">"Content-Type"</span>: <span class="c-s">"application/json"</span>,
+  },
+  body: JSON.stringify({
+    request_id: call.id,
+    agent_id: <span class="c-s">"sales-agent-prod"</span>,
+    server: <span class="c-s">"salesforce"</span>,
+    tool: call.name,
+    arguments: call.arguments,
+  }),
+});
+
+<span class="c-kw">const</span> verdict = <span class="c-kw">await</span> res.json();
+<span class="c-c">// Fail closed: anything but an explicit allow is a no.</span>
+<span class="c-kw">if</span> (!res.ok || verdict.decision !== <span class="c-s">"allow"</span>) {
+  <span class="c-kw">return</span> refuse(verdict.reason_code, verdict.approval_id);
+}
+<span class="c-kw">return</span> executeTool(call);</code></pre>
+            </div>
+          </div>
+
+          <div class="honest">
+            <span class="honest__tag mono">Today</span>
+            <p>Mother is the policy decision point your MCP client or server calls before executing a tool. Transparent MCP proxying is on the roadmap — we'll say so when it ships, not before.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ APPROVAL -->
+      <section class="section" id="approval" aria-labelledby="approval-title">
+        <div class="container split split--reverse">
+          <div class="split__copy">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Human approval</p>
+            <h2 id="approval-title">When the stakes are high, a person says yes.</h2>
+            <p class="lede">
+              A <b class="t-review">review</b> decision is real: the action is held until an authorized approver acts. Approvers see exactly who
+              is asking, what it wants to do, why Mother stopped it and which policy fired.
+            </p>
+            <ul class="checks">
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Short-lived by default.</b> <span>Pending requests expire. Expired approvals can't be executed.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Role-based approvers.</b> <span>Only members with approval rights can approve or deny.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Evidence, not edits.</b> <span>Approving creates new audit events. The original decision is never rewritten.</span></div></li>
+            </ul>
+          </div>
+
+          <div class="approval" aria-label="Example approval request">
+            <div class="approval__head">
+              <span class="approval__state"><span class="dot dot--review"></span>Approval required</span>
+              <span class="approval__timer mono" data-countdown data-seconds="872" aria-label="Expires in 14 minutes 32 seconds">14:32</span>
+            </div>
+            <div class="approval__who">
+              <div class="idcard__avatar mono" aria-hidden="true">BA</div>
+              <div>
+                <p class="approval__agent">billing-agent-prod</p>
+                <p class="approval__env">production · requested 12:04:31 UTC</p>
+              </div>
+            </div>
+            <div class="approval__what">
+              <p class="field__label">Wants to</p>
+              <p class="approval__action"><span class="mono">payments.refund</span></p>
+              <div class="approval__amount">
+                <span class="approval__amount-v">$4,200.00</span><span class="approval__amount-c mono">USD</span>
+              </div>
+              <p class="approval__res mono">payment:pi_3Qx…9Lk</p>
+            </div>
+            <dl class="approval__why">
+              <div><dt>Why Mother stopped it</dt><dd>Refund amount exceeds the 1,000 approval threshold.</dd></div>
+              <div><dt>Policy</dt><dd>High-value refunds require approval <span class="mono dim">· v3</span></dd></div>
+              <div><dt>Reason code</dt><dd class="mono">HUMAN_APPROVAL_REQUIRED</dd></div>
+            </dl>
+            <div class="approval__actions">
+              <span class="btn btn--deny" aria-hidden="true">Deny</span>
+              <span class="btn btn--approve" aria-hidden="true">Approve</span>
+            </div>
+            <p class="approval__foot">Example approval card</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ AUDIT -->
+      <section class="section section--rule" id="audit" aria-labelledby="audit-title">
+        <div class="container">
+          <header class="section__head section__head--split">
+            <div>
+              <p class="eyebrow"><span class="eyebrow__dot"></span>Audit trail</p>
+              <h2 id="audit-title">Know exactly what every agent tried to do.</h2>
+            </div>
+            <p class="lede">
+              Every evaluation becomes evidence: agent, capability, operation, resource, policy, decision, reason and timestamp — in a
+              tamper-resistant, append-oriented audit trail. There is no API for rewriting history.
+            </p>
+          </header>
+
+          <div class="audit">
+            <div class="audit__bar">
+              <div class="audit__filters" aria-hidden="true">
+                <span class="fchip fchip--on">All decisions</span>
+                <span class="fchip">agent: any</span>
+                <span class="fchip">capability: any</span>
+                <span class="fchip">last 24h</span>
+              </div>
+              <span class="audit__label mono">Example events</span>
+            </div>
+            <ol class="timeline">
+              <li class="ev ev--block">
+                <span class="ev__time mono">12:07:52</span>
+                <span class="ev__rail" aria-hidden="true"></span>
+                <div class="ev__body">
+                  <div class="ev__line"><span class="pill pill--block">BLOCK</span><b>support-agent</b><span class="mono ev__op">files.export</span><span class="ev__res mono">bucket:exports/customers.csv</span></div>
+                  <p class="ev__meta"><span class="mono">RESTRICTED_DATA_EGRESS</span> · Restricted data egress · destination external</p>
+                </div>
+              </li>
+              <li class="ev ev--approval">
+                <span class="ev__time mono">12:06:10</span>
+                <span class="ev__rail" aria-hidden="true"></span>
+                <div class="ev__body">
+                  <div class="ev__line"><span class="pill pill--neutral">APPROVED</span><b>j.rivera</b><span class="ev__plain">approved</span><span class="mono ev__op">apr_8XkQ…</span></div>
+                  <p class="ev__meta">Approval event recorded · original decision <span class="mono">dec_4Jm2…</span> unchanged</p>
+                </div>
+              </li>
+              <li class="ev ev--review">
+                <span class="ev__time mono">12:04:31</span>
+                <span class="ev__rail" aria-hidden="true"></span>
+                <div class="ev__body">
+                  <div class="ev__line"><span class="pill pill--review">REVIEW</span><b>billing-agent-prod</b><span class="mono ev__op">payments.refund</span><span class="ev__res mono">payment:pi_3Qx…</span></div>
+                  <p class="ev__meta"><span class="mono">HUMAN_APPROVAL_REQUIRED</span> · High-value refunds require approval · amount 4200</p>
+                </div>
+              </li>
+              <li class="ev ev--block">
+                <span class="ev__time mono">12:02:18</span>
+                <span class="ev__rail" aria-hidden="true"></span>
+                <div class="ev__body">
+                  <div class="ev__line"><span class="pill pill--block">BLOCK</span><b>research-agent-prod</b><span class="mono ev__op">records.modify</span><span class="ev__res mono">record:acct_2291</span></div>
+                  <p class="ev__meta"><span class="mono">OPERATION_NOT_ALLOWED</span> · Research agent is read-only</p>
+                </div>
+              </li>
+              <li class="ev ev--allow">
+                <span class="ev__time mono">12:01:44</span>
+                <span class="ev__rail" aria-hidden="true"></span>
+                <div class="ev__body">
+                  <div class="ev__line"><span class="pill pill--allow">ALLOW</span><b>research-agent-prod</b><span class="mono ev__op">knowledge.read</span><span class="ev__res mono">doc:pricing-faq</span></div>
+                  <p class="ev__meta"><span class="mono">POLICY_ALLOW</span> · Research agent read access</p>
+                </div>
+              </li>
+              <li class="ev ev--control">
+                <span class="ev__time mono">11:58:03</span>
+                <span class="ev__rail" aria-hidden="true"></span>
+                <div class="ev__body">
+                  <div class="ev__line"><span class="pill pill--neutral">POLICY</span><b>a.chen</b><span class="ev__plain">updated</span><span class="ev__res">High-value refunds require approval → v3</span></div>
+                  <p class="ev__meta">Control-plane change recorded with the new policy version</p>
+                </div>
+              </li>
+            </ol>
+            <div class="audit__foot">
+              <span><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Credential-like fields in context are redacted before storage</span>
+              <span><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Approvals and policy changes are separate events</span>
+              <span><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Filter by agent, decision, capability, environment and date</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================ BADGE -->
+      <section class="section section--badge" id="badge" aria-labelledby="badge-title">
+        <div class="container">
+          <header class="section__head">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Mother AI Protected</p>
+            <h2 id="badge-title">Make your AI controls visible.</h2>
+            <p class="lede">
+              Your customers are asking what your AI agents can do with their data. Show them. Organizations with live Mother AI controls can
+              display a dynamic <b>Mother AI Protected</b> badge that links to a public verification page — served live from Mother, so it
+              can't outlast the controls behind it.
+            </p>
+          </header>
+
+          <div class="badge-grid">
+            <div class="badge-stage">
+              <p class="badge-stage__label mono">Example badge</p>
+              <div class="badge-stage__row">
+                <div class="badge-tile badge-tile--dark"><div class="mbadge mbadge--dark" role="img" aria-label="Example badge: Mother AI Protected — AI Controls Active">
+                  <span class="mbadge__mark" aria-hidden="true"><svg><use href="#mark" /></svg></span>
+                  <span class="mbadge__text"><span class="mbadge__title">MOTHER AI PROTECTED</span><span class="mbadge__sub"><i class="mbadge__dot"></i>AI Controls Active</span></span>
+                </div></div>
+                <div class="badge-tile badge-tile--light"><div class="mbadge mbadge--light" role="img" aria-label="Example light badge: Mother AI Protected — AI Controls Active">
+                  <span class="mbadge__mark" aria-hidden="true"><svg><use href="#mark" /></svg></span>
+                  <span class="mbadge__text"><span class="mbadge__title">MOTHER AI PROTECTED</span><span class="mbadge__sub"><i class="mbadge__dot"></i>AI Controls Active</span></span>
+                </div></div>
+              </div>
+
+              <div class="states">
+                <p class="field__label">Badge status is live</p>
+                <ul>
+                  <li><span class="state state--active">ACTIVE</span><span>All controls configured and enabled.</span></li>
+                  <li><span class="state state--setup">SETUP</span><span>Controls not yet fully configured.</span></li>
+                  <li><span class="state state--suspended">SUSPENDED</span><span>Controls were disabled after activation.</span></li>
+                  <li><span class="state state--revoked">REVOKED</span><span>Badge withdrawn. Never renders green.</span></li>
+                </ul>
+              </div>
+
+              <div class="snippet">
+                <div class="snippet__head"><span class="mono">embed.html</span></div>
+<pre><code><span class="c-t">&lt;a</span> <span class="c-a">href</span>=<span class="c-s">"%SITE_ORIGIN%/verify/TOKEN"</span><span class="c-t">&gt;</span>
+  <span class="c-t">&lt;img</span> <span class="c-a">src</span>=<span class="c-s">"%SITE_ORIGIN%/badge/TOKEN.svg"</span>
+       <span class="c-a">alt</span>=<span class="c-s">"Mother AI Protected — AI Controls Active"</span><span class="c-t">&gt;</span>
+<span class="c-t">&lt;/a&gt;</span></code></pre>
+              </div>
+            </div>
+
+            <div class="verify" aria-label="Example public verification page">
+              <div class="verify__chrome" aria-hidden="true">
+                <span class="code__dots"><i></i><i></i><i></i></span>
+                <span class="verify__url mono">/verify/•••••••••••••</span>
+              </div>
+              <div class="verify__body">
+                <div class="verify__seal">
+                  <svg aria-hidden="true"><use href="#mark" /></svg>
+                </div>
+                <p class="verify__title">Mother AI Protected</p>
+                <dl class="verify__meta">
+                  <div><dt>Organization</dt><dd>Acme, Inc.</dd></div>
+                  <div><dt>Status</dt><dd><span class="state state--active">ACTIVE</span></dd></div>
+                </dl>
+                <ul class="verify__controls">
+                  <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Agent identity configured</li>
+                  <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Policy enforcement enabled</li>
+                  <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Human approval capability enabled</li>
+                  <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Audit logging enabled</li>
+                </ul>
+                <p class="verify__time mono">Last verified · live at page load</p>
+                <p class="verify__fine">Example verification page for a fictional organization.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="eligibility">
+            <div class="eligibility__col">
+              <h3>Earned by configuration, not by signing up</h3>
+              <p>The badge only turns active when every requirement is met — and it changes state automatically when they aren't.</p>
+            </div>
+            <ul class="eligibility__list">
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Organization active</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Gateway enabled</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>Audit logging enabled</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>At least one active agent</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>At least one enabled policy</li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg>An active production API key</li>
+            </ul>
+          </div>
+
+          <p class="disclaimer">
+            Mother AI Protected indicates that this organization has configured and enabled Mother AI agent access controls. It is not a
+            certification of the organization's entire cybersecurity program or a guarantee against security incidents.
+          </p>
+        </div>
+      </section>
+
+      <!-- ================================================================ FOUNDING ACCESS -->
+      <section class="section section--founding" id="founding-access" aria-labelledby="founding-title">
+        <div class="container founding">
+          <div class="founding__copy">
+            <p class="eyebrow"><span class="eyebrow__dot"></span>Founding Access</p>
+            <h2 id="founding-title">Put your agents behind Mother.</h2>
+            <p class="lede">
+              Mother AI is in early access. The gateway and policy engine are live; some enterprise integrations are still rolling out.
+              Founding teams work directly with the people building it.
+            </p>
+            <ul class="checks">
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Real enforcement from day one.</b> <span>Agent registry, policies, approvals and audit on the production gateway.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Shape what ships next.</b> <span>Integration and MCP priorities are set with founding teams.</span></div></li>
+              <li><svg class="ico" aria-hidden="true"><use href="#i-check" /></svg><div><b>Straight answers.</b> <span>We'll tell you what Mother does today and what it doesn't.</span></div></li>
+            </ul>
+          </div>
+
+          <div class="formcard" data-founding>
+            <form class="fa" data-fa-form novalidate>
+              <div class="fa__grid">
+                <label class="field">
+                  <span class="field__label">Name</span>
+                  <input name="name" autocomplete="name" maxlength="120" required />
+                  <span class="field__err" data-err="name"></span>
+                </label>
+                <label class="field">
+                  <span class="field__label">Company</span>
+                  <input name="company" autocomplete="organization" maxlength="160" required />
+                  <span class="field__err" data-err="company"></span>
+                </label>
+                <label class="field field--full">
+                  <span class="field__label">Work email</span>
+                  <input name="work_email" type="email" autocomplete="email" maxlength="254" required />
+                  <span class="field__err" data-err="work_email"></span>
+                </label>
+                <label class="field field--full">
+                  <span class="field__label">What do your agents do, and what do you need to control?</span>
+                  <textarea name="use_case" rows="4" maxlength="2000" required></textarea>
+                  <span class="field__err" data-err="use_case"></span>
+                </label>
+                <label class="field">
+                  <span class="field__label">Approximate number of agents</span>
+                  <select name="agent_count" required>
+                    <option value="">Select…</option>
+                    <option value="1-5">1–5</option>
+                    <option value="6-25">6–25</option>
+                    <option value="26-100">26–100</option>
+                    <option value="100+">100+</option>
+                    <option value="unknown">Not sure yet</option>
+                  </select>
+                  <span class="field__err" data-err="agent_count"></span>
+                </label>
+                <label class="field">
+                  <span class="field__label">Do you use MCP?</span>
+                  <select name="uses_mcp" required>
+                    <option value="">Select…</option>
+                    <option value="yes">Yes</option>
+                    <option value="evaluating">Evaluating</option>
+                    <option value="no">No</option>
+                  </select>
+                  <span class="field__err" data-err="uses_mcp"></span>
+                </label>
+                <div class="hp" aria-hidden="true">
+                  <label>Website <input name="website" tabindex="-1" autocomplete="off" /></label>
+                </div>
+                <div class="field--full fa__turnstile" data-turnstile hidden></div>
+              </div>
+              <div class="fa__foot">
+                <button class="btn btn--primary btn--lg" type="submit" data-fa-submit>Request Founding Access</button>
+                <p class="fa__status" data-fa-status role="status" aria-live="polite"></p>
+              </div>
+            </form>
+            <div class="fa__done" data-fa-done hidden tabindex="-1">
+              <div class="fa__done-mark" aria-hidden="true"><svg class="ico"><use href="#i-check" /></svg></div>
+              <h3>Request received.</h3>
+              <p>Thanks — your Founding Access request is in. We'll reach out at the work email you provided.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer__grid">
+        <div class="footer__brand">
+          <a class="brand" href="/" aria-label="Mother AI home">
+            <svg class="brand__mark" aria-hidden="true"><use href="#mark" /></svg>
+            <span class="brand__word">Mother<span class="brand__ai">AI</span></span>
+          </a>
+          <p>Control Plane for AI Agents. Mother AI watches what your AIs are allowed to do.</p>
+        </div>
+        <nav class="footer__col" aria-label="Product">
+          <p class="footer__h">Product</p>
+          <a href="#how-it-works">How it works</a>
+          <a href="#demo">Demo</a>
+          <a href="#mcp">MCP</a>
+          <a href="#badge">Badge</a>
+          <a href="#founding-access">Founding Access</a>
+        </nav>
+        <nav class="footer__col" aria-label="Developers">
+          <p class="footer__h">Developers</p>
+          <a href="https://github.com/LHBUSA/Mother-AI/blob/main/docs/API.md" rel="noopener">API docs</a>
+          <a href="https://github.com/LHBUSA/Mother-AI/blob/main/docs/SECURITY_MODEL.md" rel="noopener">Security model</a>
+          <a href="/app/">Sign in</a>
+        </nav>
+      </div>
+      <div class="container footer__base">
+        <span>© <span data-year>2026</span> Mother AI</span>
+        <span class="mono">Deterministic policy enforcement for autonomous agents</span>
+      </div>
+    </footer>
+  </body>
+</html>

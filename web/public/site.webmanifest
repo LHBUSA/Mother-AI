@@ -1,0 +1,14 @@
+{
+  "name": "Mother AI",
+  "short_name": "Mother AI",
+  "description": "Control Plane for AI Agents",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#07080a",
+  "theme_color": "#07080a",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512" }
+  ]
+}
