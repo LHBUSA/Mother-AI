@@ -106,12 +106,19 @@ async function shot(name, width) {
   return overflow;
 }
 
+const FALLBACK_HOSTS = (SITE.fallbackOrigins ?? []).map((o) => new URL(o).host);
 async function visit(path, name, width, { expect4xx = [] } = {}) {
   expected4xx = new Set(expect4xx);
   await page.setViewport({ width, height: width === 390 ? 844 : 900, deviceScaleFactor: 1 });
   const res = await page.goto(`${ORIGIN}${path}`, { waitUntil: "networkidle0", timeout: 45_000 });
   await settle();
   await shot(name, width);
+  if (width === 1440) {
+    // Public links, snippets and embeds must use the canonical host.
+    const html = await page.evaluate(() => document.documentElement.outerHTML);
+    const leaked = FALLBACK_HOSTS.filter((h) => html.includes(h));
+    check(`${name}: no fallback-host URLs rendered`, leaked.length === 0 && new URL(page.url()).origin === ORIGIN, leaked.join(","));
+  }
   return res;
 }
 
@@ -141,6 +148,17 @@ for (const width of [1440, 390]) {
   await visit(`/verify/${"0".repeat(32)}`, "verify-invalid", width, { expect4xx: [`/verify/${"0".repeat(32)}`, "/badge/" + "0".repeat(32) + ".svg"] });
   await visit("/does-not-exist", "not-found", width, { expect4xx: ["/does-not-exist"] });
 }
+
+// Canonical metadata + Founding Access section on the home page
+await visit("/#founding-access", "founding-access", 1440);
+const meta = await page.evaluate(() => ({
+  canonical: document.querySelector('link[rel="canonical"]')?.getAttribute("href"),
+  og: document.querySelector('meta[property="og:url"]')?.getAttribute("content"),
+  form: !!document.querySelector("#founding-access form"),
+}));
+check("canonical + OG URLs use the canonical host", meta.canonical === `${ORIGIN}/` && meta.og === `${ORIGIN}/`, JSON.stringify(meta));
+check("Founding Access form renders", meta.form);
+await visit("/#founding-access", "founding-access", 390);
 
 // Interactive demo (1440)
 await visit("/#demo", "demo-before", 1440);

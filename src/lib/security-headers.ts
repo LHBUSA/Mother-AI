@@ -29,5 +29,13 @@ export function withSecurityHeaders(response: Response, opts: { publicEmbed?: bo
     if (!h.has("Cross-Origin-Resource-Policy")) h.set("Cross-Origin-Resource-Policy", "same-origin");
   }
   h.delete("Access-Control-Allow-Origin");
+  // Zone-level edge features (e.g. Web Analytics auto-injection on the proptechusa.ai zone)
+  // must never rewrite Mother AI pages or inject third-party scripts into the console,
+  // invite or verification flows. Cloudflare skips response modification on no-transform.
+  if ((h.get("Content-Type") ?? "").includes("text/html")) {
+    const cc = h.get("Cache-Control");
+    if (!cc) h.set("Cache-Control", "no-transform");
+    else if (!/no-transform/i.test(cc)) h.set("Cache-Control", `${cc}, no-transform`);
+  }
   return res;
 }
