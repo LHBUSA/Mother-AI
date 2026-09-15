@@ -537,6 +537,21 @@ describe("runtime containment V1", () => {
     expect(await all(`SELECT id FROM risk_signals WHERE organization_id = ?`, a.orgId)).toHaveLength(0);
   });
 
+  it("incident blast radius statements stay within D1's compound-SELECT limit (each statement has at most one UNION)", async () => {
+    const { blastRadius } = await import("../../src/runtime/incidents");
+    const statements: string[] = [];
+    const fakeDb = {
+      prepare: (sqlText: string) => ({ bind: () => ({ sqlText, bind: () => ({ sqlText }) }) }),
+      batch: async (stmts: Array<{ sqlText: string }>) => {
+        statements.push(...stmts.map((s) => s.sqlText));
+        return stmts.map(() => ({ results: [] }));
+      },
+    } as unknown as D1Database;
+    const incident = { id: "inc_x", organization_id: "org_x", subject_type: "agent", subject_id: "agt_x", status: "open", severity: "high", cause: "manual_quarantine", opened_at: new Date().toISOString(), contained_at: null, cleared_at: null } as never;
+    await blastRadius(fakeDb, incident, new Date().toISOString());
+    expect(statements.length).toBeGreaterThan(5);
+    for (const sqlText of statements) expect((sqlText.match(/\bUNION\b/gi) ?? []).length).toBeLessThanOrEqual(1);
+  });
   // ------------------------------------------------------------------ evidence integrity
   it("runtime evidence and containment state cannot be altered or deleted, and quarantine cannot be escaped by editing state or mode", async () => {
     const org = await setupOrg(env, { mode: "enforce" });

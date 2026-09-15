@@ -22,31 +22,30 @@ export async function blastRadius(db: D1Database, incident: IncidentRow & { clea
          AND (d.session_id IN (SELECT id FROM scope)
               OR (?2 = 'agent' AND d.agent_id = ?3 AND d.created_at >= ?4 AND d.created_at <= ?5)))`;
   const b = (sql: string) => db.prepare(sql).bind(incident.organization_id, incident.subject_type, incident.subject_id, windowStart, windowEnd);
-  const [sessions, touched, decisions, approvals, leases, events] = await db.batch([
+  // D1 caps the number of terms in a compound SELECT (the recursive scope CTE already uses two), so every
+  // "touched" category is its own single-SELECT statement rather than one UNION ALL.
+  const touchedKinds: Array<[kind: string, value: string, where: string, group: string]> = [
+    ["agent", "agent_key", "1 = 1", "agent_key"],
+    ["capability", "capability || '.' || operation", "1 = 1", "capability, operation"],
+    ["mcp_tool", "mcp_server || ' / ' || mcp_tool", "mcp_tool IS NOT NULL", "mcp_server, mcp_tool"],
+    ["resource", "resource", "resource IS NOT NULL", "resource"],
+    ["destination", "destination", "destination IS NOT NULL", "destination"],
+    ["data_class", "data_class", "data_class IS NOT NULL", "data_class"],
+  ];
+  const touchedStatements = touchedKinds.map(([kind, value, where, group]) =>
+    b(`${scope}
+       SELECT '${kind}' AS kind, ${value} AS value, COUNT(*) AS n, MIN(created_at) AS first_seen, MAX(created_at) AS last_seen,
+              SUM(decision = 'allow') AS allowed, SUM(decision = 'review') AS reviewed, SUM(decision = 'block') AS blocked
+         FROM scoped WHERE ${where} GROUP BY ${group}`),
+  );
+  const results = await db.batch([
     b(`${scope}
        SELECT s.id, s.agent_id, a.agent_key, s.parent_session_id, s.root_session_id, s.depth, s.principal_type, s.principal_ref,
               s.opened_at, s.expires_at, s.closed_at
          FROM agent_sessions s JOIN agents a ON a.id = s.agent_id
         WHERE s.organization_id = ?1 AND s.id IN (SELECT id FROM scope)
         ORDER BY s.depth, s.opened_at LIMIT 200`),
-    b(`${scope}
-       SELECT 'agent' AS kind, agent_key AS value, COUNT(*) AS n, MIN(created_at) AS first_seen, MAX(created_at) AS last_seen,
-              SUM(decision = 'allow') AS allowed, SUM(decision = 'review') AS reviewed, SUM(decision = 'block') AS blocked FROM scoped GROUP BY agent_key
-       UNION ALL
-       SELECT 'capability', capability || '.' || operation, COUNT(*), MIN(created_at), MAX(created_at),
-              SUM(decision = 'allow'), SUM(decision = 'review'), SUM(decision = 'block') FROM scoped GROUP BY capability, operation
-       UNION ALL
-       SELECT 'mcp_tool', mcp_server || ' / ' || mcp_tool, COUNT(*), MIN(created_at), MAX(created_at),
-              SUM(decision = 'allow'), SUM(decision = 'review'), SUM(decision = 'block') FROM scoped WHERE mcp_tool IS NOT NULL GROUP BY mcp_server, mcp_tool
-       UNION ALL
-       SELECT 'resource', resource, COUNT(*), MIN(created_at), MAX(created_at),
-              SUM(decision = 'allow'), SUM(decision = 'review'), SUM(decision = 'block') FROM scoped WHERE resource IS NOT NULL GROUP BY resource
-       UNION ALL
-       SELECT 'destination', destination, COUNT(*), MIN(created_at), MAX(created_at),
-              SUM(decision = 'allow'), SUM(decision = 'review'), SUM(decision = 'block') FROM scoped WHERE destination IS NOT NULL GROUP BY destination
-       UNION ALL
-       SELECT 'data_class', data_class, COUNT(*), MIN(created_at), MAX(created_at),
-              SUM(decision = 'allow'), SUM(decision = 'review'), SUM(decision = 'block') FROM scoped WHERE data_class IS NOT NULL GROUP BY data_class`),
+    ...touchedStatements,
     b(`${scope}
        SELECT sc.id, sc.request_id, sc.session_id, sc.parent_decision_id, sc.agent_key, sc.protocol, sc.capability, sc.operation, sc.resource,
               sc.destination, sc.data_class, sc.mcp_server, sc.mcp_tool, sc.decision, sc.reason_code, sc.created_at,
@@ -65,14 +64,21 @@ export async function blastRadius(db: D1Database, incident: IncidentRow & { clea
          FROM capability_leases l
         WHERE l.organization_id = ?1 AND (l.session_id IN (SELECT id FROM scope) OR (?2 = 'agent' AND l.agent_id = ?3 AND l.issued_at >= ?4))
         ORDER BY l.issued_at DESC LIMIT 200`),
-    b(`${scope}
+    db
+      .prepare(
+        `${scope}
        SELECT e.id, e.type, e.source, e.outcome, e.reason_code, e.session_id, e.decision_id, e.request_id, e.approval_id, e.lease_id, e.created_at
          FROM runtime_events e
         WHERE e.organization_id = ?1
-          AND (e.session_id IN (SELECT id FROM scope) OR (?2 = 'agent' AND e.agent_id = ?3 AND e.created_at >= ?4 AND e.created_at <= ?5) OR e.incident_id = (SELECT id FROM security_incidents WHERE id = ?6))
-        ORDER BY e.created_at DESC LIMIT 200`).bind(incident.organization_id, incident.subject_type, incident.subject_id, windowStart, windowEnd, incident.id),
+          AND (e.session_id IN (SELECT id FROM scope) OR (?2 = 'agent' AND e.agent_id = ?3 AND e.created_at >= ?4 AND e.created_at <= ?5) OR e.incident_id = ?6)
+        ORDER BY e.created_at DESC LIMIT 200`,
+      )
+      .bind(incident.organization_id, incident.subject_type, incident.subject_id, windowStart, windowEnd, incident.id),
   ]);
-  const byKind = (kind: string) => (touched!.results as Array<Record<string, unknown>>).filter((r) => r.kind === kind).map(({ kind: _k, ...rest }) => rest);
+  const sessions = results[0]!;
+  const touchedRows = results.slice(1, 1 + touchedKinds.length).flatMap((r) => r.results as Array<Record<string, unknown>>);
+  const [decisions, approvals, leases, events] = results.slice(1 + touchedKinds.length);
+  const byKind = (kind: string) => touchedRows.filter((r) => r.kind === kind).map(({ kind: _k, ...rest }) => rest);
   const eventRows = events!.results as Array<{ source: string }>;
   return {
     window: { from: windowStart, to: windowEnd },
