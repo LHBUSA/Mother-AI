@@ -24,7 +24,7 @@ export function setUnauthenticatedHandler(fn: () => void) {
   onUnauthenticated = fn;
 }
 
-export async function api<T>(path: string, opts: { method?: Method; body?: unknown; allow401?: boolean } = {}): Promise<T> {
+export async function api<T>(path: string, opts: { method?: Method; body?: unknown; allow401?: boolean; signal?: AbortSignal } = {}): Promise<T> {
   const method = opts.method ?? (opts.body !== undefined ? "POST" : "GET");
   const init: RequestInit = { method, credentials: "include", headers: { Accept: "application/json" } };
   if (method !== "GET") {
@@ -34,6 +34,10 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
   // Bounded: a hung request surfaces as TIMEOUT instead of an endless loading state.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // A caller-supplied signal (e.g. the user navigated to another item) cancels the request too.
+  const cancel = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  else opts.signal?.addEventListener("abort", cancel, { once: true });
   init.signal = controller.signal;
   let res: Response;
   let text: string;
@@ -41,10 +45,12 @@ export async function api<T>(path: string, opts: { method?: Method; body?: unkno
     res = await fetch(apiUrl(path), init);
     text = await res.text();
   } catch {
+    if (opts.signal?.aborted) throw new ApiFailure(0, "ABORTED", "The request was cancelled.");
     if (controller.signal.aborted) throw new ApiFailure(0, "TIMEOUT", "Mother AI didn't respond in time. Retry in a moment.");
     throw new ApiFailure(0, "NETWORK_ERROR", "Mother AI could not be reached. Check your connection and retry.");
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", cancel);
   }
   let data: unknown = null;
   if (text) {

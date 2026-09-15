@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, errorMessage, type Decision } from "../lib/api";
-import { useApi, useDocumentTitle, useNow } from "../lib/hooks";
+import { useApi, useDocumentTitle, useKeyedApi, useNow } from "../lib/hooks";
+import { incidentView } from "./incident-view";
 import { Link, useRouter } from "../lib/router";
 import { dateTime, relativeTime } from "../lib/format";
 import { useSession } from "../lib/session";
@@ -306,18 +307,43 @@ function TouchedList({ title, rows }: { title: string; rows: Touched[] }) {
   );
 }
 
+const fetchIncident = (id: string, signal: AbortSignal) => api<IncidentDetail>(`/api/console/security/incidents/${id}`, { signal });
+
 export function IncidentPage({ id }: { id: string }) {
   useDocumentTitle("Incident");
   const { can } = useSession();
   const now = useNow(30_000);
-  const { data, error, loading, reload } = useApi<IncidentDetail>(`/api/console/security/incidents/${id}`, [id]);
+  const { state, reload } = useKeyedApi<IncidentDetail>(id, fetchIncident, (key, d) => d.incident?.id === key);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // A clearance note or error typed for one incident never carries over to another.
+  useEffect(() => {
+    setNote("");
+    setErr(null);
+  }, [id]);
 
-  if (error && !data) return <ErrorState error={error} onRetry={() => void reload()} />;
-  if (loading && !data) return <div className="card card-body"><Skeleton lines={10} /></div>;
-  if (!data) return null;
+  // Only a response for exactly this route's incident is ever rendered; while it loads or if it fails, the page
+  // names the requested incident and shows nothing from any other incident.
+  const view = incidentView(state, id);
+  const eyebrow = <Link to="/app/security" className="link-sm">Security</Link>;
+  if (view.phase === "loading") {
+    return (
+      <>
+        <PageHeader eyebrow={eyebrow} title={view.heading} description="Loading this incident…" />
+        <div className="card card-body" aria-busy="true"><Skeleton lines={10} /></div>
+      </>
+    );
+  }
+  if (view.phase === "error" || state.status !== "ready") {
+    return (
+      <>
+        <PageHeader eyebrow={eyebrow} title={view.heading} description="This incident could not be loaded." />
+        <ErrorState error={state.status === "error" ? state.error : null} onRetry={() => void reload()} />
+      </>
+    );
+  }
+  const data = state.data;
   const { incident, blast_radius: br } = data;
   const active = incident.status !== "cleared";
   const count = (relation: string) => data.members.filter((m) => m.relation === relation).length;
@@ -326,7 +352,7 @@ export function IncidentPage({ id }: { id: string }) {
     setBusy(true);
     setErr(null);
     try {
-      await api(`/api/console/security/incidents/${id}/clear`, { body: { note: note.trim() } });
+      await api(`/api/console/security/incidents/${incident.id}/clear`, { body: { note: note.trim() } });
       toast("Cleared — issue new authority; older grants and leases stay invalid");
       setNote("");
       void reload();
@@ -340,12 +366,12 @@ export function IncidentPage({ id }: { id: string }) {
   return (
     <>
       <PageHeader
-        eyebrow={<Link to="/app/security" className="link-sm">Security</Link>}
-        title={`Incident ${incident.id}`}
+        eyebrow={eyebrow}
+        title={view.heading}
         description={`${CAUSE_LABEL[incident.cause]} · ${incident.subject_type} ${data.subject?.label ?? ""}`}
       />
       <div className={cx("sec-banner", active ? "sec-banner-bad" : "sec-banner-ok")} role="status">
-        <strong>{active ? (incident.status === "contained" ? "Contained" : "Quarantined") : "Cleared"}</strong>
+        <strong>{view.banner}</strong>
         <span>
           {active
             ? "Every new action in scope is blocked. Grants and leases issued before the quarantine can never be used."
