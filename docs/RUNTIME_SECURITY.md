@@ -8,6 +8,32 @@ IDENTIFY → AUTHORIZE → OBSERVE → CORRELATE → DETECT → CONTAIN → INVE
 
 The policy engine (`mpe-1.0.0`) is unchanged. The runtime layer is a separate, versioned, deterministic risk engine (`mre-1.0.0`) that can only **preserve or restrict** a policy decision. No model decides anything.
 
+## Release notes
+
+### Mother Runtime Containment V1 — production canary passed
+
+**Status: accepted and frozen (2026-09-15).** V1 does not change `mpe-1.0.0`, `mre-1.0.0`, containment thresholds, clearance rules, lease semantics, grant invalidation or production mode behavior. Follow-up work is tracked in the [V1.1 hardening backlog](#v11-hardening-backlog).
+
+| | |
+|---|---|
+| Policy engine | `mpe-1.0.0` |
+| Runtime engine | `mre-1.0.0` |
+| Production canary | **PASS** — organization `proptechusa`, one canary agent, Worker `c9449ae2` (main `bb39cc2`) |
+| Human-only passkey clearance | **Proven.** All three canary incidents were cleared by an active human Owner signed in with a passkey, each with a written note; the organization's automation admin (`users.kind = automation`) cannot clear. Every clearance recorded `contained → cleared` with a user actor and a `security.cleared` control event, and preserved the containment epoch. |
+| Post-containment authority invalidation | **Proven.** After clearance, the pre-containment grant was refused `APPROVAL_INVALIDATED` and the pre-containment lease `LEASE_REVOKED`; fresh session, decision and lease were all issued after the latest containment epoch. |
+| Exact-resource single-use lease | **Proven.** A 60 s, 1-use lease bound to one exact resource was granted once and refused `LEASE_EXHAUSTED` on the second use. |
+| Default-deny resource isolation | **Proven.** The same agent and operation on a different resource returned `block` / `DEFAULT_DENY` with no lease and no approval. |
+| Replay blocking | **Proven.** Replaying the pre-quarantine ALLOW `request_id` during containment returned BLOCK, left the original decision `allow` unchanged, and appended `runtime.replay_blocked` evidence. |
+| Cleanup | **Complete.** Organization returned to `monitor` (alerts off); canary sessions closed through the API; temporary API key revoked; temporary ALLOW/BLOCK policies archived; pre-existing REVIEW policy untouched; canary agent disabled. All incident, decision, runtime-event, signal and audit evidence retained. |
+| Active incidents / quarantines | **0 / 0** (all organizations) |
+| Unrelated production impact | 0 — other organizations unchanged from the preflight snapshot; 0 risk-evaluation invariant violations |
+| Slack | **NOT TESTED** (excluded by owner instruction; no Slack destination configured, 0 security notifications) |
+
+Shipped with the canary:
+
+- **Incident detail 500 on D1** (main `bb39cc2`): the blast-radius query exceeded D1's compound-SELECT term limit, so the console could not render an incident or its clearance control. Each blast-radius category is now its own statement; a regression test caps UNIONs per statement.
+- **Stale incident console state** (main `b6e3acc`, UI only): the incident page renders only a response for exactly the incident in the route. Switching incidents clears the previous data and aborts its request; late, out-of-order or mismatched responses are ignored; loading and error states name the requested incident. Verified by unit regression tests and a production browser smoke (cleared A → slow B, A → contained B, A → nonexistent B, A → failing B, rapid A→B→C→A→B with out-of-order responses, and a mismatched response body): no stale status banner in any recorded frame.
+
 ## Enforcement boundary
 
 **Mother governs actions that call Mother.** V1 runtime protection covers API, MCP and tool actions routed through trusted integrations that hold a Mother API key.
@@ -123,3 +149,23 @@ Off by default. When an organization enables them (Settings → Organization →
 - Worker: roll back to the previous version. Migration 0003 is additive, so earlier code runs against it unchanged — but an earlier Worker does not enforce quarantines.
 - Without a deploy: an organization can be set to `monitor` or `off` only when no quarantine is active; an active quarantine is cleared by a human.
 - No down-migration; evidence is retained.
+
+## V1.1 hardening backlog
+
+Findings from the V1 production canary. They are hardening items, **not V1 defects**: V1 behaved as specified in both cases. Neither item may weaken containment.
+
+### 1. Integration retry hardening
+
+Observed: after a human clearance, two attempts by the same agent to use authority it held before containment (a grant refused `APPROVAL_INVALIDATED`, a lease refused `LEASE_REVOKED`) each scored `USE_AFTER_EXPIRY_OR_REVOCATION` (+40) and re-quarantined the agent at 80. This is correct under `mre-1.0.0`, but an integration that blindly retries dead authority will contain itself again.
+
+- A containment epoch change must cause SDK/integration caches to flush every grant and lease obtained before it.
+- `APPROVAL_INVALIDATED`, `LEASE_REVOKED` and `LEASE_EXHAUSTED` must be documented and surfaced as **terminal, non-retryable** authority errors.
+- Clients must obtain fresh authority (new session, evaluation, approval or lease) rather than retry dead authority.
+
+### 2. Incident deduplication
+
+Observed: the agent was quarantined at score 95. Its session, already inside the agent's contained scope, carried the same score 95 from the same signals; on the session's next request it crossed the threshold and opened a second, nested incident for the session (recorded as `CONTINUATION_AFTER_QUARANTINE`), which needed its own human clearance.
+
+- Investigate whether a quarantined agent and its contained child sessions should share or correlate into one incident instead of opening a redundant nested incident.
+- Preserve all evidence and the full blast radius of both subjects.
+- Do not weaken containment to accomplish this: every subject in scope stays contained until a human clears it.
